@@ -353,6 +353,7 @@ class Robot(Object):
         
         if self.idle_time <= 100 or self.is_in_station_path() or self.current_state == "delivering_pod":
             return False
+        
         # IF COLLISION > THRESHOLD
 
         # Calculate next step coordinates
@@ -597,8 +598,8 @@ class Robot(Object):
         # Get robot locations
 
         robot_objects = self.universe.landscape.getRobotObject()
-        robots_location = [[info['x'], info['y']] for info in robot_objects.values()]
-        print("Robot location")
+        robots_location = [[info['x'], info['y']] for info in robot_objects.values() if info['state'] != 'station_processing']
+        print("Robot Location")
         print(robots_location)
         
         zones = Zone(robots_location, methods="kmeans")

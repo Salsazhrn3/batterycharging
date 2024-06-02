@@ -56,10 +56,23 @@ class Zone:
     
     def calculate_penalty(self, robots_location):
         self.penalty = [1] * len(self.boundaries)
+        area = [1] * len(self.boundaries)
+        robot_count = [1] * len(self.boundaries)
+        for index, zone in enumerate(self.boundaries):
+            area[index] = (zone[1][0] - zone[0][0]) * (zone[1][1] - zone [0][1])
+            print("area: ", area[index])
+
         for robot in robots_location:
             for index, zone in enumerate(self.boundaries):
                 if ((robot[1] <= zone[0][0] and robot[1] >= zone[1][0]) and (robot[0] >= zone[0][1] and robot[0] <= zone[1][1])):
-                    self.penalty[index] += 1
+                    robot_count[index] += 1
+                    # self.penalty[index] += 1
+
+        for index, zone in enumerate(self.boundaries):
+            # self.penalty[index] = area[index] / robot_count[index]
+            self.penalty[index] = robot_count[index]
+
+        #get robot by coor 
         return self.penalty
     
         
@@ -79,7 +92,8 @@ class Zone:
         x_coords, y_coords = zip(*points)
         x_min, x_max = min(x_coords), max(x_coords)
         y_min, y_max = min(y_coords), max(y_coords)
-        
+        # if x_min < 5:
+        #     x_min = 5
         if x_max - x_min + 1 < 3:
             diff = 3 - (x_max - x_min + 1)
             x_max += diff // 2
@@ -88,8 +102,12 @@ class Zone:
             diff = 6 - (y_max - y_min + 1)
             y_max += diff // 2
             y_min -= diff - (diff // 2)
-        
-        return [[y_max, x_min], [y_min, x_max]]
+
+        if x_min < 5:
+            x_min = 5
+        if y_min < 0:
+            y_min = 0
+        return [[int(y_max), int(x_min)], [int(y_min), int(x_max)]]
     
     def kmeans_clustering(self, robots_location):
         """Clustering using KMeans
