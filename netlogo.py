@@ -287,8 +287,10 @@ def draw_storage_from_generated_file(universe: Inventory):
     universe.graph_pod = graph_pod
     data = pd.read_csv("generated_pod.csv", header=None)
     total_rows = len(data)
+    total_cols = 0
     for y, row in data.iterrows():
         # Invert Y only to draw
+        total_cols = 0
         for x, value in row.items():
             obj = Object()
             obj.object_type = 'way-direction'
@@ -447,7 +449,9 @@ def draw_storage_from_generated_file(universe: Inventory):
 
             obj.pos_x = x
             obj.pos_y = y
+            total_cols += 1
             universe.addObject(obj)
+    universe.set_warehouse_size([total_rows, total_cols])
 
 
 def construct_station_path(data: DataFrame, start_x, start_y):

@@ -351,7 +351,7 @@ class Robot(Object):
         
         # cari di self
         
-        if self.idle_time <= 100 or self.is_in_station_path() or self.current_state == "delivering_pod":
+        if self.idle_time <= 50 or self.is_in_station_path() or self.current_state == "delivering_pod":
             return False
         
         # IF COLLISION > THRESHOLD
@@ -596,21 +596,26 @@ class Robot(Object):
             self.neutralizeRobotState()
 
         # Get robot locations
-
         robot_objects = self.universe.landscape.getRobotObject()
         robots_location = [[info['x'], info['y']] for info in robot_objects.values() if info['state'] != 'station_processing']
-        print("Robot Location")
-        print(robots_location)
         
-        zones = Zone(robots_location, methods="kmeans")
+        robots_idle_time = []
+        robot_ob = []
+        if len(robots_location) > 0:
+            robot_ob = self.get_robots_by_coords(robots_location)
+
+        for robot in robot_ob:
+            robots_idle_time.append(robot.idle_time)
+
+        # Create Zone based on robots location
+        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods="route_cluster")
         
         # Calculate Penalty For Each Zone
-        penalties = zones.calculate_penalty(robots_location)
+        penalties = zones.calculate_penalty(robots_location, robots_idle_time, self.universe.get_warehouse_size(), threshold=5)
         zone_boundary = zones.get_boundary()
-        print("Robot location")
-        print(self.pos_x, self.pos_y)
-        print("Zone Boundaries")
+        print("Zone Boundary")
         print(zone_boundary)
+    
         nodes_to_avoid = []
         if avoid_front:
             avoid_coord = self._calculate_next_blocks(round(self.pos_x), round(self.pos_y),
