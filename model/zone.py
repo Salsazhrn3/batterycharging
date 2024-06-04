@@ -83,7 +83,7 @@ class Zone:
         for index, zone in enumerate(self.boundaries):
             for robot_index, robot in enumerate(robots_location):
                 # print("y: ", robot[0])
-                if (robot[1] <= zone[0][0] and robot[1] >= zone[1][0]) and (robot[0] >= zone[0][1] and robot[0] <= zone[1][1]) and idle_time[index] > 50:
+                if (robot[1] <= zone[0][0] and robot[1] >= zone[1][0]) and (robot[0] >= zone[0][1] and robot[0] <= zone[1][1]) and idle_time[robot_index] > 50:
                     robot_idle_zone[robot_index] += 1 
 
         for robot in robots_location:
