@@ -187,12 +187,21 @@ class Inventory(Universe):
             # Pod assignment
             order_station = self.station_manager.get_station_by_id(order.station_id)
             skus_in_station = order_station.get_skus_in_station(self.order_manager)
+            
+            skus_in_order = order.get_remaining_skus()
             station_coordinate = order_station.coordinate
             print("Station coordinate")
             print(station_coordinate)
 
+
             for sku in order.get_remaining_skus():
-                available_pod: Pod = self.pod_manager.get_available_pod(sku, order.skus, station_coordinate)
+                print("TES")
+
+                # Similarity check
+                available_pod: Pod = self.pod_manager.get_available_pod(sku, skus_in_order, station_coordinate)
+                
+                # Default
+                # available_pod: Pod = self.pod_manager.get_available_pod(sku)
                 if available_pod is None:
                     continue
                 quantity_to_take = order.get_quantity_left_for_sku(sku)

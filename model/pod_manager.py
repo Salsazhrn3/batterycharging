@@ -33,12 +33,10 @@ class PodManager:
 
         return
 
-    # def get_available_pod(self, sku: str, skus_in_station):
-    #     # If SKU is available
-    #     sku_in_station_list = [i for i in skus_in_station]
+    # Default
+    # def get_available_pod(self, sku: str):
     #     if sku in self.sku_to_pods:
     #         for pod in self.sku_to_pods[sku]:
-    #             similarity_score = 0
     #             if pod.is_idle is True:
     #                 return pod
                 
@@ -63,8 +61,8 @@ class PodManager:
                     
                     if len(pod_skus_in_station_skus) > 0:
                         for skus in pod_skus_in_station_skus:
-                            skus_qty = pod.get_quantity(skus)
-                            if skus_qty > skus_in_order[skus]["total_quantity"]:
+                            skus_qty_in_pod = pod.get_quantity(skus)
+                            if skus_qty_in_pod > skus_in_order[skus]:
                                 similarity_score += 1
                     
                     pod_coordinate = [pod.coordinate.x, pod.coordinate.y]
