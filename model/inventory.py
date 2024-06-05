@@ -5,7 +5,6 @@ import pandas as pd
 from engine.landscape import Landscape
 from engine.universe import Universe
 from engine.util import *
-from . import order_manager
 from .order import Order
 from .order_manager import OrderManager
 from .pod import Pod
@@ -170,6 +169,7 @@ class Inventory(Universe):
 
     def process_orders(self):
         for order in self.order_manager.orders:
+            # Station assignment
             if order.station_id is None:
                 available_station = self.station_manager.find_available_picking_station()
                 if available_station is not None:
@@ -183,8 +183,16 @@ class Inventory(Universe):
 
             order.start_processing(int(self._tick))
 
+
+            # Pod assignment
+            order_station = self.station_manager.get_station_by_id(order.station_id)
+            skus_in_station = order_station.get_skus_in_station(self.order_manager)
+            station_coordinate = order_station.coordinate
+            print("Station coordinate")
+            print(station_coordinate)
+
             for sku in order.get_remaining_skus():
-                available_pod: Pod = self.pod_manager.get_available_pod(sku)
+                available_pod: Pod = self.pod_manager.get_available_pod(sku, order.skus, station_coordinate)
                 if available_pod is None:
                     continue
                 quantity_to_take = order.get_quantity_left_for_sku(sku)

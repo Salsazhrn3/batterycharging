@@ -5,10 +5,12 @@ class Order:
         self.process_start_time = -1
         self.order_complete_time = -1
         self.station_id = None
+        self.status = -3
         self.skus = {}
 
     def assign_station(self, station_id: int):
         self.station_id = station_id
+        self.status = -1
 
     def add_sku(self, sku, total_quantity):
         self.skus[sku] = {
@@ -16,7 +18,7 @@ class Order:
             'quantity_committed': 0,
             'quantity_delivered': 0
         }
-
+    
     def commit_quantity(self, sku, quantity):
         self.skus[sku]['quantity_committed'] += quantity
 

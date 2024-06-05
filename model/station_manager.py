@@ -2,6 +2,8 @@ from typing import List, Optional, Dict
 
 from model.station import Station
 
+from .order_manager import OrderManager
+
 
 class StationManager:
     def __init__(self):
@@ -37,3 +39,5 @@ class StationManager:
 
     def get_station_by_id(self, station_id: int):
         return self.stations_by_id[station_id]
+    
+    
