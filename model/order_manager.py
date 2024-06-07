@@ -16,4 +16,14 @@ class OrderManager:
         """Retrieve an order by its ID using the dictionary for quick access."""
         return self.order_id_to_order.get(order_id, None)
     
+    def get_backlog_skus(self):
+        backlog_order_dict = {}
+        for order in self.orders:
+            if int(order.order_id) < 0:
+                # print(order.get_remaining_skus())
+                backlog_order_dict[order.order_id] = set(order.get_remaining_skus())
+        return backlog_order_dict
+                
+
+
   

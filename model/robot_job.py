@@ -4,7 +4,8 @@ from engine.netlogo_coordinate import NetLogoCoordinate
 
 
 class RobotJob:
-    def __init__(self, pod_coordinate: NetLogoCoordinate, station_coordinate: NetLogoCoordinate, station_path: List[NetLogoCoordinate]):
+    def __init__(self, pod_id, pod_coordinate: NetLogoCoordinate, station_coordinate: NetLogoCoordinate, station_path: List[NetLogoCoordinate]):
+        self.pod_id = pod_id
         self.pod_coordinate = pod_coordinate
         self.station_coordinate = station_coordinate
         self.station_path = station_path

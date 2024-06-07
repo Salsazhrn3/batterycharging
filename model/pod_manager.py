@@ -3,9 +3,11 @@ from typing import List
 from model.pod import Pod
 from engine import NetLogoCoordinate
 
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import manhattan_distances
+
 
 class PodManager:
     def __init__(self):
@@ -40,7 +42,7 @@ class PodManager:
     #             if pod.is_idle is True:
     #                 return pod
                 
-    def get_available_pod(self, sku: str, skus_in_order, station_coordinate):
+    def get_available_pod_similarity(self, sku: str, skus_in_order, station_coordinate):
         # If SKU is available
         sku_in_order_list = [i for i in skus_in_order]
         pod_available_for_multiple_items = pd.DataFrame(columns=["pod_id", "similarity_score", "distance_to_station"])
@@ -93,6 +95,8 @@ class PodManager:
 
     def mark_pod_available(self, coordinate: NetLogoCoordinate):
         pod = self.coordinate_to_pods.get((coordinate.x, coordinate.y))
+        station = pod.station
+        station.remove_pod(pod.pod_id)
         pod.is_idle = True
 
     def get_pods_by_sku(self, sku):

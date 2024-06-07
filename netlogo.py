@@ -6,7 +6,10 @@ from typing import List
 
 import networkx as nx
 import pandas as pd
+import numpy as np
+
 from pandas import DataFrame
+from sklearn.cluster import KMeans
 
 from engine.netlogo_coordinate import NetLogoCoordinate
 from engine.object import Object
@@ -269,11 +272,148 @@ def draw_layout_from_generated_file(universe: Inventory):
         [pod.pos_x, pod.pos_y, 0]
     ]
 
+def jaccard_similarity(set1, set2):
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+     
+    return intersection / union  
+
+def compute_jaccard_similarity(data):
+    similarity_dict = {}
+    grouped = data.groupby('order_id')['item_id'].apply(set)
+    # print(grouped)
+    # grouped = 
+    #   -13                             {70}
+    #   -12                         {10, 30}
+    for order_dum, items in grouped.items():
+        similarities = []
+        for other_order_dum, other_items in grouped.items():
+            if order_dum == other_order_dum:
+                similarities.append(1.0)  # similarity with itself is 1
+            else:
+                similarity = jaccard_similarity(items, other_items)
+                similarities.append(similarity)
+        similarity_dict[order_dum] = similarities
+    # similarity_dict = {-13: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -12: [0.0, 1.0, 0.0, 0.5, 0.4, 0.3333333333333333, 0.0, 0.6666666666666666, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0]}
+    return grouped, similarity_dict
+
+def cluster_backlog_orders(jaccard_similarities, total_station, station_capacity_df):
+    jaccard_similarities_list = [similarities for similarities in jaccard_similarities.values()]
+    # print(jaccard_similarities_list)
+    cluster_labels = [-1] * len(jaccard_similarities_list)
+    station_remaining_capacity = station_capacity_df['capacity_left'].tolist()
+
+    # K-Means clustering
+    kmeans = KMeans(n_clusters=total_station)
+    kmeans.fit(jaccard_similarities_list)
+
+    cluster_labels1 = kmeans.labels_
+
+    cluster_distances = []
+
+    # calculate distances for each order
+    for i, label in enumerate(cluster_labels1):
+        centroid = kmeans.cluster_centers_[label]
+        distance = np.linalg.norm(jaccard_similarities_list[i] - centroid)
+        # cluster_distances[label].append(distance)
+        cluster_distances.append((i, label, distance))
+    
+    # print(cluster_distances)
+    
+    cluster_distances.sort(key=lambda x: x[2])
+
+    # print(cluster_distances)
+
+    # print("INI STATION CAPACITY DF ", station_capacity_df)
+
+    # assign each backlog order to a cluster
+    for order_idx, label, distance in cluster_distances:
+        # station_id = 1
+        # print("label: ", label)
+        station_id = station_capacity_df.iloc[label]['id_station']
+        if station_remaining_capacity[label] > 0:
+            cluster_labels[order_idx] = station_id
+            station_remaining_capacity[label] -= 1
+        else:
+            cluster_labels[order_idx] = None
+
+    print("cluster label:")
+    print(cluster_labels)
+
+    return cluster_labels
+
+def assign_cluster_labels(universe: Inventory, data_backlog_order_df, full_order, cluster_labels, station_capacity_df):
+    order_dum_to_cluster = dict(zip(full_order.index, cluster_labels))
+    # print(data_backlog_order_df)
+    # assign cluster labels to the 'station' 
+    for index, row in data_backlog_order_df.iterrows():
+        order_dum = row['order_id']
+        # print("order dum ", order_dum)
+        if order_dum in order_dum_to_cluster:
+            new_order = Order(order_dum, 0)
+            # INI BELOMM ADD SKU
+            new_order.add_sku(1, 10)
+            station_id = order_dum_to_cluster[order_dum]
+            new_order.station_id = station_id
+
+            universe.order_manager.add_order(new_order)
+        else:
+            pass
+    # print(data_backlog_order_df)
+    # print(station_capacity_df)
+    return station_capacity_df
 
 def assign_backlog_orders(universe: Inventory):
-    order = Order("backlog", 0)
-    order.add_sku(1, 10)
-    universe.order_manager.add_order(order)
+    # order = Order("-1", 0)
+    # order.add_sku(1, 10)
+    # print("ini order ", order)
+
+    # open file order
+    order_path = "generated_order_new.csv"
+    data_order_df = pd.read_csv(order_path)
+    # filter order_id < 0
+    unassigned_backlog_order = data_order_df.loc[(data_order_df['order_id'] < 0)].sort_values(by=['order_id']).reset_index(drop=True)
+
+    columns = ['id_station', 'capacity_left']
+    station_id_cap_df = pd.DataFrame(columns=columns)
+
+    # mask = universe.station_manager.stations.station_id.str.contains(r'^picker-\d+$', regex=True)
+    # print(mask)
+    # i = 0
+    # print(station_id_cap_df['id_station'])
+
+    for station in universe.station_manager.stations:
+        # mask = station.station_id.str.contains(r'^picker-\d+$', regex=True)
+        # if(mask):
+        id = station.station_id
+        cap = station.max_orders - len(station.order_ids)
+
+        station_id_cap_df = station_id_cap_df.append({'id_station': id, 'capacity_left': cap}, ignore_index=True)
+
+    is_picker = station_id_cap_df['id_station'].str.startswith('picker')
+
+    station_id_cap_df = station_id_cap_df[is_picker]
+    station_id_cap_df.reset_index(drop=True, inplace=True)
+    # print("STATION ID CAP DF: ")
+    # print(station_id_cap_df)
+
+    if len(unassigned_backlog_order) > 0:
+        # total_station = len(small_station_id_cap_df)
+        # total_station = len(universe.station_manager.stations)
+        total_station = len(station_id_cap_df)
+
+        full_order, jaccard_similarities = compute_jaccard_similarity(unassigned_backlog_order)
+
+        # ubo : data yg order < 0
+        # full_order: 
+
+        cluster_labels = cluster_backlog_orders(jaccard_similarities, total_station, station_id_cap_df)
+
+        station_id_cap_df = assign_cluster_labels(universe, unassigned_backlog_order, full_order, cluster_labels, station_id_cap_df)
+      
+
+    # should be here to cluster backlog, cuz we just need to cluster it only ONCE at the very beginning
+    # universe.order_manager.add_order(order)
 
 
 def draw_storage_from_generated_file(universe: Inventory):

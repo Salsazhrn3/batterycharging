@@ -3,6 +3,7 @@ from typing import List
 from engine.object import Object
 from engine.netlogo_coordinate import NetLogoCoordinate
 from .order_manager import OrderManager
+from .pod import Pod
 
 
 class Station(Object):
@@ -15,8 +16,9 @@ class Station(Object):
         self.coordinate = None
         self.path: List[NetLogoCoordinate] = []
         self.order_ids: List[int] = []
-        self.max_orders = 2
+        self.max_orders = 6
         self.skus = {}
+        self.incoming_pod: List[int] = []
         super().__init__()
 
     def add_order(self, order_id: int):
@@ -30,6 +32,14 @@ class Station(Object):
 
     def is_replenishment_station(self) -> bool:
         return self.station_type == "replenishment"
+    
+    def add_pod(self, pod):
+        self.incoming_pod.append(pod)
+    
+    def remove_pod(self, pod):
+        # print(pod)
+        # print(self.incoming_pod)
+        self.incoming_pod.remove(pod)
 
     def get_skus_in_station(self, order_manager: OrderManager):
         self._skus_in_station(order_manager)

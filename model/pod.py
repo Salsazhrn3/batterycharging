@@ -10,6 +10,7 @@ class Pod(Object):
         self.coordinate = NetLogoCoordinate()
         self.skus = {}
         self.is_idle = True
+        self.station = None
         super().__init__()
 
     def add_sku(self, sku, limit_qty, current_qty, threshold):
