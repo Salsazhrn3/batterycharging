@@ -6,7 +6,10 @@ from typing import List
 
 import networkx as nx
 import pandas as pd
+import numpy as np
+
 from pandas import DataFrame
+from sklearn.cluster import KMeans
 
 from engine.netlogo_coordinate import NetLogoCoordinate
 from engine.object import Object
@@ -269,12 +272,126 @@ def draw_layout_from_generated_file(universe: Inventory):
         [pod.pos_x, pod.pos_y, 0]
     ]
 
+def jaccard_similarity(set1, set2):
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+     
+    return intersection / union  
+
+def compute_jaccard_similarity(data):
+    similarity_dict = {}
+    grouped = data.groupby('order_id')['item_id'].apply(set)
+    for order_dum, items in grouped.items():
+        similarities = []
+        for other_order_dum, other_items in grouped.items():
+            if order_dum == other_order_dum:
+                similarities.append(1.0)  # similarity with itself is 1
+            else:
+                similarity = jaccard_similarity(items, other_items)
+                similarities.append(similarity)
+        similarity_dict[order_dum] = similarities
+    return grouped, similarity_dict
+
+def cluster_backlog_orders(jaccard_similarities, total_station, station_capacity_df):
+    jaccard_similarities_list = [similarities for similarities in jaccard_similarities.values()]
+    # print(jaccard_similarities_list)
+    cluster_labels = [-1] * len(jaccard_similarities_list)
+    station_remaining_capacity = station_capacity_df['capacity_left'].tolist()
+
+    # K-Means clustering
+    kmeans = KMeans(n_clusters=total_station)
+    kmeans.fit(jaccard_similarities_list)
+
+    cluster_labels1 = kmeans.labels_
+
+    cluster_distances = []
+
+    # calculate distances for each order
+    for i, label in enumerate(cluster_labels1):
+        centroid = kmeans.cluster_centers_[label]
+        distance = np.linalg.norm(jaccard_similarities_list[i] - centroid)
+        cluster_distances.append((i, label, distance))
+        
+    cluster_distances.sort(key=lambda x: x[2])
+
+    # assign each backlog order to a cluster
+    for order_idx, label, distance in cluster_distances:
+        station_id = station_capacity_df.iloc[label]['id_station']
+        if station_remaining_capacity[label] > 0:
+            cluster_labels[order_idx] = station_id
+            station_remaining_capacity[label] -= 1
+        else:
+            cluster_labels[order_idx] = None
+
+    # print("cluster label:")
+    # print(cluster_labels)
+
+    return cluster_labels
+
+def assign_cluster_labels(universe: Inventory, data_backlog_order_df, full_order, cluster_labels, station_capacity_df):
+    order_dum_to_cluster = dict(zip(full_order.index, cluster_labels))
+    # print("BACKLOG ORDER")
+    # print(data_backlog_order_df)
+    temp = float('inf')
+    # assign cluster labels to the 'station' 
+    new_order = None
+    
+    for index, row in data_backlog_order_df.iterrows():
+        order_dum = row['order_id']
+        if(temp != order_dum or order_dum == -1):
+            # print("hai cantik")
+            if(temp != float('inf')):
+                
+                new_order.station_id = station_id
+                if station_id is not None:
+                    station = universe.station_manager.get_station_by_id(station_id)
+                    station.add_order(new_order.order_id)
+
+                universe.order_manager.add_order(new_order)
+
+            new_order = Order(order_dum, 0)
+            temp = order_dum
+ 
+        new_order.add_sku(row['item_id'], row['item_quantity'])
+        station_id = order_dum_to_cluster[order_dum]
+    
+  
+    return station_capacity_df
 
 def assign_backlog_orders(universe: Inventory):
-    order = Order("backlog", 0)
-    order.add_sku(1, 10)
-    universe.order_manager.add_order(order)
 
+    # open file order
+    order_path = "generated_order_new.csv"
+    data_order_df = pd.read_csv(order_path)
+    # filter order_id < 0
+    unassigned_backlog_order = data_order_df.loc[(data_order_df['order_id'] < 0)].sort_values(by=['order_id']).reset_index(drop=True)
+
+    columns = ['id_station', 'capacity_left']
+    station_id_cap_df = pd.DataFrame(columns=columns)
+
+
+
+    for station in universe.station_manager.stations:
+        # mask = station.station_id.str.contains(r'^picker-\d+$', regex=True)
+        # if(mask):
+        id = station.station_id
+        cap = station.max_orders - len(station.order_ids)
+
+        station_id_cap_df = station_id_cap_df.append({'id_station': id, 'capacity_left': cap}, ignore_index=True)
+
+    is_picker = station_id_cap_df['id_station'].str.startswith('picker')
+
+    station_id_cap_df = station_id_cap_df[is_picker]
+    station_id_cap_df.reset_index(drop=True, inplace=True)
+
+    if len(unassigned_backlog_order) > 0:
+        total_station = len(station_id_cap_df)
+
+        full_order, jaccard_similarities = compute_jaccard_similarity(unassigned_backlog_order)
+
+        cluster_labels = cluster_backlog_orders(jaccard_similarities, total_station, station_id_cap_df)
+
+        station_id_cap_df = assign_cluster_labels(universe, unassigned_backlog_order, full_order, cluster_labels, station_id_cap_df)
 
 def draw_storage_from_generated_file(universe: Inventory):
     station_picker_counter = 1

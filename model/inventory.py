@@ -5,7 +5,6 @@ import pandas as pd
 from engine.landscape import Landscape
 from engine.universe import Universe
 from engine.util import *
-from . import order_manager
 from .order import Order
 from .order_manager import OrderManager
 from .pod import Pod
@@ -98,6 +97,7 @@ class Inventory(Universe):
                     self.finish_orders_in_job(o.job)
 
                 if o.current_state == 'idle' and o.job is not None:
+                    # station.remove_pod(job.pod_id)
                     self.pod_manager.mark_pod_available(o.job.pod_coordinate)
                     o.job = None
 
@@ -106,10 +106,13 @@ class Inventory(Universe):
 
         self._tick += self.tick_to_second
 
+   
+
     def finish_orders_in_job(self, job: RobotJob):
         for order_id, sku, quantity in job.orders:
-            order: Order = self.order_manager.get_order_by_id(order_id)
+            order = self.order_manager.get_order_by_id(order_id)
             order.deliver_quantity(sku, quantity)
+
 
             if order.is_order_completed():
                 station = self.station_manager.get_station_by_id(order.station_id)
@@ -117,25 +120,25 @@ class Inventory(Universe):
 
             job.is_finished = True
 
+
     def find_new_orders(self):
-        orders_df = pd.read_csv('generated_order.csv')
+        orders_df = pd.read_csv('generated_order_new.csv')
 
         current_second = self.next_process_tick
         previous_second = (self.next_process_tick - 1)
 
         # Filter orders that have arrived by the current second and have not been processed before
-        new_orders = orders_df[(orders_df['Order Arrival (in second)'] <= current_second) &
-                               (orders_df['Order Arrival (in second)'] > previous_second)]
+        new_orders = orders_df[(orders_df['order_arrival'] <= current_second) & (orders_df['order_arrival'] > previous_second) & (orders_df['order_arrival'] != 0)]
 
-        grouped_orders = new_orders.groupby('Order Id')
+        grouped_orders = new_orders.groupby('order_id')
 
         for order_id, group in grouped_orders:
-            order_items = group[['Item Id', 'Quantity']].to_dict('records')
+            order_items = group[['item_id', 'item_quantity']].to_dict('records')
             order = Order(order_id=order_id, order_arrival=current_second)
 
             # Add each item in the group to the order
             for item in order_items:
-                order.add_sku(item['Item Id'], item['Quantity'])
+                order.add_sku(item['item_id'], item['item_quantity'])
 
             self.order_manager.add_order(order)
 
@@ -169,9 +172,16 @@ class Inventory(Universe):
         return result
 
     def process_orders(self):
+        # print("BACKLOG CAK")
+        # print(self.order_manager.get_backlog_skus())
+        # print(self.order_manager.orders)
         for order in self.order_manager.orders:
+            # print("Order")
+            # print(order.order_id)
+            # Station assignment
             if order.station_id is None:
-                available_station = self.station_manager.find_available_picking_station()
+                # available_station = self.station_manager.find_available_picking_station()
+                available_station = self.station_manager.find_highest_similarity_station(order.skus, self.pod_manager)
                 if available_station is not None:
                     order.assign_station(available_station.station_id)
                     available_station.add_order(order.order_id)
@@ -183,15 +193,35 @@ class Inventory(Universe):
 
             order.start_processing(int(self._tick))
 
+
+            # Pod assignment
+         
+            order_station = self.station_manager.get_station_by_id(order.station_id)
+            skus_in_station = order_station.get_skus_in_station(self.order_manager)
+            
+            skus_in_order = order.get_remaining_skus()
+            station_coordinate = order_station.coordinate
+            # print("Station coordinate")
+            # print(station_coordinate)
+
+
             for sku in order.get_remaining_skus():
-                available_pod: Pod = self.pod_manager.get_available_pod(sku)
+
+                # Similarity check
+                available_pod: Pod = self.pod_manager.get_available_pod_similarity(sku, skus_in_order, station_coordinate)
+                
+                # Default
+                # available_pod: Pod = self.pod_manager.get_available_pod(sku)
                 if available_pod is None:
                     continue
                 quantity_to_take = order.get_quantity_left_for_sku(sku)
                 order.commit_quantity(sku, quantity_to_take)
+                order_station.add_pod(available_pod.pod_id)
 
-                order_station = self.station_manager.get_station_by_id(order.station_id)
-                job = RobotJob(available_pod.coordinate, station_coordinate=order_station.coordinate,
+                available_pod.station = order_station
+                
+                job = RobotJob(available_pod.pod_id
+                               ,available_pod.coordinate, station_coordinate=order_station.coordinate,
                                station_path=order_station.path)
                 self.pod_manager.mark_pod_not_available(available_pod.coordinate)
                 job.add_picking_task(order.order_id, sku, quantity_to_take)

@@ -88,8 +88,8 @@ end
 GRAPHICS-WINDOW
 15
 10
-773
-529
+758
+484
 -1
 -1
 15.0
@@ -113,10 +113,10 @@ ticks
 15.0
 
 BUTTON
-1450
-140
-1533
-173
+1084
+23
+1167
+56
 setup
 setup
 NIL
@@ -130,10 +130,10 @@ NIL
 1
 
 BUTTON
-1355
-150
-1419
-184
+1003
+23
+1067
+57
 go
 go
 NIL
@@ -147,10 +147,10 @@ NIL
 1
 
 BUTTON
-1226
-150
-1323
-183
+879
+23
+976
+56
 go-forever
 go
 T
@@ -164,10 +164,10 @@ NIL
 1
 
 MONITOR
-1225
-212
-1388
-269
+828
+103
+991
+160
 Order
 order_count
 17
@@ -175,10 +175,10 @@ order_count
 14
 
 MONITOR
-1225
-298
-1387
-355
+828
+189
+990
+246
 Total Energy
 total_energy
 17
@@ -186,10 +186,10 @@ total_energy
 14
 
 MONITOR
-1225
-375
-1390
-432
+828
+265
+993
+322
 Average Energy
 average_total_energy
 17
@@ -197,10 +197,10 @@ average_total_energy
 14
 
 MONITOR
-1225
-450
-1390
-507
+828
+340
+993
+397
 Stop and Go
 _stop
 17
@@ -208,10 +208,10 @@ _stop
 14
 
 MONITOR
-1225
-525
-1390
-582
+828
+415
+993
+472
 Total Turning
 total_turning
 17
@@ -219,10 +219,10 @@ total_turning
 14
 
 BUTTON
-975
-185
-1057
-218
+779
+23
+861
+56
 Setup Py
 setup-py
 NIL
@@ -287,11 +287,11 @@ true
 0
 Polygon -7500403 true true 150 0 0 150 105 150 105 293 195 293 195 150 300 150
 
-arrow-up
+arrow-down
 true
 0
-Line -16777216 false 75 150 150 225
-Line -16777216 false 150 225 225 150
+Line -16777216 false 75 150 150 75
+Line -16777216 false 225 150 150 75
 
 arrow-left
 true
@@ -305,11 +305,11 @@ true
 Line -16777216 false 150 75 225 150
 Line -16777216 false 225 150 150 225
 
-arrow-down
+arrow-up
 true
 0
-Line -16777216 false 75 150 150 75
-Line -16777216 false 225 150 150 75
+Line -16777216 false 75 150 150 225
+Line -16777216 false 150 225 225 150
 
 box
 false
@@ -750,7 +750,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.3.0
+NetLogo 6.4.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
