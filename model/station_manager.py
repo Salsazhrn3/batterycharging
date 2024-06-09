@@ -41,8 +41,8 @@ class StationManager:
                 station_incoming_pod = station.incoming_pod
                 station_pod_skus_set = set()
                 for pod_id in station_incoming_pod:
-                    pod = pod_manager.get_pod_by_id(pod_id)
-                    pod_skus = [i for i in pod.skus if i.current_qty > 0]
+                    pod  = pod_manager.get_pod_by_id(pod_id)
+                    pod_skus = [item for item, details in pod.skus.items() if details['current_qty'] > 0]
                     station_pod_skus_set.update(pod_skus)
 
                 station_pod_skus_list = list(station_pod_skus_set)
@@ -60,6 +60,7 @@ class StationManager:
         assign_station = None
         if len(available_station_rank) > 0:
             assign_station_id = available_station_rank.loc[0, "station_id"]
+            # print("apa ", assign_station_id)
             assign_station = self.get_station_by_id(assign_station_id)
     
         return assign_station

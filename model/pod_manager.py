@@ -31,24 +31,20 @@ class PodManager:
             self.sku_to_pods[sku] = []
         self.sku_to_pods[sku].append(pod)
 
-    def _available_similarity_pod(self, skus_in_station):
-
-        return
-
     # Default
-    # def get_available_pod(self, sku: str):
-    #     if sku in self.sku_to_pods:
-    #         for pod in self.sku_to_pods[sku]:
-    #             if pod.is_idle is True:
-    #                 return pod
+    def get_available_pod(self, sku: str):
+        if sku in self.sku_to_pods:
+            for pod in self.sku_to_pods[sku]:
+                if pod.is_idle is True:
+                    return pod
                 
     def get_available_pod_similarity(self, sku: str, skus_in_order, station_coordinate):
         # If SKU is available
         sku_in_order_list = [i for i in skus_in_order]
         pod_available_for_multiple_items = pd.DataFrame(columns=["pod_id", "similarity_score", "distance_to_station"])
         
-        print("SKU IN ORDER")
-        print(skus_in_order)
+        # print("SKU IN ORDER")
+        # print(skus_in_order)
 
         station_coordinate = [station_coordinate.x, station_coordinate.y]
 
@@ -84,9 +80,10 @@ class PodManager:
                 assigned_pod_id = pod_available_for_multiple_items.loc[0, "pod_id"]
            
                 assigned_pod = self.get_pod_by_id(assigned_pod_id)
-            
-            print("ASSIGNED POD")
-            print(assigned_pod)
+            else:
+                assigned_pod = self.get_available_pod(sku)
+            # print("ASSIGNED POD")
+            # print(assigned_pod)
             return assigned_pod
 
     def mark_pod_not_available(self, coordinate: NetLogoCoordinate):

@@ -152,8 +152,6 @@ class Zone:
             boundaries = []
             for cluster_id in range(self.cluster_num):
                 cluster_points = robots[labels == cluster_id]
-                print("Cluster points")
-                print(cluster_points)
                 cluster_boundary_points = self._minimum_bounding_rectangle(cluster_points)
                 boundaries.append(cluster_boundary_points)
 
@@ -209,6 +207,6 @@ class Zone:
                 zones.append([[row,col],[row+3, col]])
 
         self.boundaries = zones
-        print(zones)
+        # print(zones)
         return
 

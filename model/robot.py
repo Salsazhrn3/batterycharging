@@ -608,15 +608,13 @@ class Robot(Object):
             robots_idle_time.append(robot.idle_time)
 
         # Create Zone based on robots location
-        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods="route_cluster")
+        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods="default")
         
         # Calculate Penalty For Each Zone
         penalties = zones.calculate_penalty(robots_location, robots_idle_time, self.universe.get_warehouse_size(), threshold=5)
         zone_boundary = zones.get_boundary()
-        print("Zone Boundary")
-        print(zone_boundary)
-    
         nodes_to_avoid = []
+
         if avoid_front:
             avoid_coord = self._calculate_next_blocks(round(self.pos_x), round(self.pos_y),
                                                       self.heading, 1, include_self=False)

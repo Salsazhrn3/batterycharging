@@ -37,8 +37,6 @@ class Station(Object):
         self.incoming_pod.append(pod)
     
     def remove_pod(self, pod):
-        # print(pod)
-        # print(self.incoming_pod)
         self.incoming_pod.remove(pod)
 
     def get_skus_in_station(self, order_manager: OrderManager):
@@ -48,8 +46,8 @@ class Station(Object):
     def _skus_in_station(self, order_manager: OrderManager):
         for order_id in self.order_ids:
             order = order_manager.get_order_by_id(order_id)
-            print("Remaining SKU")
-            print(order.get_remaining_skus())
+            # print("Remaining SKU")
+            # print(order.get_remaining_skus())
             for sku, value in order.get_remaining_skus().items():
                 if sku not in self.skus:
                     self.skus[sku] = value
