@@ -354,8 +354,9 @@ class Robot(Object):
         if self.idle_time <= 50 or self.is_in_station_path() or self.current_state == "delivering_pod":
             return False
         
-        # IF COLLISION > THRESHOLD
-
+        # if self.idle_time >50:
+        #     return True
+        
         # Calculate next step coordinates
         next_step_coordinates = self._calculate_next_blocks(
             round(self.pos_x), round(self.pos_y), self.heading, 1, include_self=False)
@@ -608,7 +609,7 @@ class Robot(Object):
             robots_idle_time.append(robot.idle_time)
 
         # Create Zone based on robots location
-        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods="default")
+        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods="kmeans")
         
         # Calculate Penalty For Each Zone
         penalties = zones.calculate_penalty(robots_location, robots_idle_time, self.universe.get_warehouse_size(), threshold=5)

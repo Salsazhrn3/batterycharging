@@ -79,12 +79,14 @@ class Zone:
             # self.penalty[index] = robot_count[index]
 
         robot_idle_zone = [1] * len(self.boundaries)
+        # robot_idle_zone = [1] * len(robots_location)
      
         for index, zone in enumerate(self.boundaries):
             for robot_index, robot in enumerate(robots_location):
                 # print("y: ", robot[0])
                 if (robot[1] <= zone[0][0] and robot[1] >= zone[1][0]) and (robot[0] >= zone[0][1] and robot[0] <= zone[1][1]) and idle_time[robot_index] > 50:
-                    robot_idle_zone[robot_index] += 1 
+                    # robot_idle_zone[robot_index] += 1 
+                    robot_idle_zone[index] += 1 
 
         for robot in robots_location:
             for index, zone in enumerate(self.boundaries):
@@ -131,6 +133,11 @@ class Zone:
             x_min = 5
         if y_min < 0:
             y_min = 0
+        
+        if y_max > 30:
+            y_max = 30
+        if x_max > 43:
+            x_max = 43
         return [[int(y_max), int(x_min)], [int(y_min), int(x_max)]]
     
     def kmeans_clustering(self, robots_location):
