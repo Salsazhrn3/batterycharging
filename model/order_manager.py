@@ -7,6 +7,7 @@ class OrderManager:
     def __init__(self):
         self.orders: List[Order] = []
         self.order_id_to_order: Dict[int, Order] = {}
+        self.finished_order = []
 
     def add_order(self, order: Order):
         self.orders.append(order)

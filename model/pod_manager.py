@@ -38,9 +38,9 @@ class PodManager:
                 if pod.is_idle is True:
                     return pod
                 
-    def get_available_pod_similarity(self, sku: str, skus_in_order, station_coordinate):
+    def get_available_pod_similarity(self, sku: str, skus_in_station, station_coordinate):
         # If SKU is available
-        sku_in_order_list = [i for i in skus_in_order]
+        sku_in_station_list = [i for i in skus_in_station]
         pod_available_for_multiple_items = pd.DataFrame(columns=["pod_id", "similarity_score", "distance_to_station"])
         
         # print("SKU IN ORDER")
@@ -54,13 +54,13 @@ class PodManager:
 
                 if pod.is_idle is True:
                     pod_skus = [i for i in pod.skus]
-                    pod_skus_in_station_skus_mask = np.isin(sku_in_order_list, pod_skus)
-                    pod_skus_in_station_skus = np.array(sku_in_order_list)[pod_skus_in_station_skus_mask]
+                    pod_skus_in_station_skus_mask = np.isin(sku_in_station_list, pod_skus)
+                    pod_skus_in_station_skus = np.array(sku_in_station_list)[pod_skus_in_station_skus_mask]
                     
                     if len(pod_skus_in_station_skus) > 0:
                         for skus in pod_skus_in_station_skus:
                             skus_qty_in_pod = pod.get_quantity(skus)
-                            if skus_qty_in_pod > skus_in_order[skus]:
+                            if skus_qty_in_pod > skus_in_station[skus]:
                                 similarity_score += 1
                     
                     pod_coordinate = [pod.coordinate.x, pod.coordinate.y]
@@ -80,10 +80,7 @@ class PodManager:
                 assigned_pod_id = pod_available_for_multiple_items.loc[0, "pod_id"]
            
                 assigned_pod = self.get_pod_by_id(assigned_pod_id)
-            else:
-                assigned_pod = self.get_available_pod(sku)
-            # print("ASSIGNED POD")
-            # print(assigned_pod)
+        
             return assigned_pod
 
     def mark_pod_not_available(self, coordinate: NetLogoCoordinate):

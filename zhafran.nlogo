@@ -113,10 +113,10 @@ ticks
 15.0
 
 BUTTON
-1084
-23
-1167
-56
+400
+510
+483
+543
 setup
 setup
 NIL
@@ -130,10 +130,10 @@ NIL
 1
 
 BUTTON
-1003
-23
-1067
-57
+319
+510
+383
+544
 go
 go
 NIL
@@ -147,10 +147,10 @@ NIL
 1
 
 BUTTON
-879
-23
-976
-56
+195
+510
+292
+543
 go-forever
 go
 T
@@ -164,10 +164,10 @@ NIL
 1
 
 MONITOR
-828
-103
-991
-160
+505
+500
+668
+557
 Order
 order_count
 17
@@ -175,10 +175,10 @@ order_count
 14
 
 MONITOR
-828
-189
-990
-246
+45
+575
+207
+632
 Total Energy
 total_energy
 17
@@ -186,10 +186,10 @@ total_energy
 14
 
 MONITOR
-828
-265
-993
-322
+225
+575
+390
+632
 Average Energy
 average_total_energy
 17
@@ -197,10 +197,10 @@ average_total_energy
 14
 
 MONITOR
-828
-340
-993
-397
+405
+575
+570
+632
 Stop and Go
 _stop
 17
@@ -208,10 +208,10 @@ _stop
 14
 
 MONITOR
-828
-415
-993
-472
+595
+575
+760
+632
 Total Turning
 total_turning
 17
@@ -219,10 +219,10 @@ total_turning
 14
 
 BUTTON
-779
-23
-861
-56
+95
+510
+177
+543
 Setup Py
 setup-py
 NIL

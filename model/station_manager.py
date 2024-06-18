@@ -43,6 +43,7 @@ class StationManager:
                 for pod_id in station_incoming_pod:
                     pod  = pod_manager.get_pod_by_id(pod_id)
                     pod_skus = [item for item, details in pod.skus.items() if details['current_qty'] > 0]
+                    #pod_skus = [i for i in pod.skus if i.current_qty > 0]
                     station_pod_skus_set.update(pod_skus)
 
                 station_pod_skus_list = list(station_pod_skus_set)

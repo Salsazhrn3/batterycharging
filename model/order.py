@@ -12,6 +12,9 @@ class Order:
         self.station_id = station_id
         self.status = -1
 
+    def assign_pod(self):
+        self.status = 0
+
     def add_sku(self, sku, total_quantity):
         self.skus[sku] = {
             'total_quantity': total_quantity,
@@ -41,6 +44,7 @@ class Order:
 
     def complete_order(self, complete_time):
         """Record the time when order processing is completed."""
+        self.status = 1
         self.order_complete_time = complete_time
 
     def get_quantity_left_for_sku(self, sku):
