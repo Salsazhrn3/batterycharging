@@ -21,6 +21,11 @@ class Order:
             'quantity_committed': 0,
             'quantity_delivered': 0
         }
+
+    def has_sku(self, sku):
+        if sku in self.skus:
+            return True
+        return False
     
     def commit_quantity(self, sku, quantity):
         self.skus[sku]['quantity_committed'] += quantity

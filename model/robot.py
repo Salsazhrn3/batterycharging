@@ -289,21 +289,31 @@ class Robot(Object):
 
             self.idle_time = 0
 
+        print("ahaha: ", self.route_stop_points[0])
         next_destination_coordinate = self.route_stop_points[0]
+        
 
         if isinstance(next_destination_coordinate, Heading):
             self.handle_directional(next_destination_coordinate)
             return
 
         if self.not_able_to_move(next_destination_coordinate):
-            self.idle_time += 1
-            self.velocity = 0
-            self.acceleration = 0
-            self.universe.landscape.setObject(self.robotName(), self.pos_x, self.pos_y, self.velocity,
-                                              self.acceleration,
-                                              self.heading, self.current_state)
+            self.update_idle_state()
             return
 
+        candidate_conflict_coordinate = self.handle_conflicts(next_destination_coordinate)
+        
+        self.execute_move(candidate_conflict_coordinate, next_destination_coordinate)
+
+    def update_idle_state(self):
+        self.idle_time += 1
+        self.velocity = 0
+        self.acceleration = 0
+        self.universe.landscape.setObject(self.robotName(), self.pos_x, self.pos_y, self.velocity,
+                                          self.acceleration, self.heading, self.current_state)
+        # self.universe.landscape.objects.values()
+    
+    def handle_conflicts(self, next_destination_coordinate):
         candidate_conflict_coordinate = None
         if isinstance(next_destination_coordinate, NetLogoCoordinate) and not self.is_in_station_path():
             self_coord = NetLogoCoordinate(self.pos_x, self.pos_y)
@@ -314,7 +324,8 @@ class Robot(Object):
             nearest_conflict_candidates = self.get_nearest_robot_conflict_candidate(next_step_coordinates, search_area)
             if nearest_conflict_candidates is not None:
                 for candidate, meeting_coordinate in nearest_conflict_candidates:
-                    if candidate['state'] == "station_processing" or candidate['state'] == 'idle' or candidate['velocity'] == 0:
+                    if (candidate['state'] == "station_processing" or candidate['state'] == 'idle'
+                            or candidate['velocity'] == 0):
                         continue
 
                     neighbor_coord = NetLogoCoordinate(candidate['x'], candidate['y'])
@@ -339,24 +350,25 @@ class Robot(Object):
                             candidate_conflict_coordinate = self.calculate_next_movement_from_conflict(
                                 meeting_coordinate, next_destination_coordinate)
 
+        return candidate_conflict_coordinate
+    
+    def execute_move(self, candidate_conflict_coordinate, next_destination_coordinate):
         self.idle_time = 0
-        if candidate_conflict_coordinate is not None and candidate_conflict_coordinate != next_destination_coordinate:
-            self.handle_next_movement(candidate_conflict_coordinate, False)
+        if candidate_conflict_coordinate and candidate_conflict_coordinate != next_destination_coordinate:
+            self.handle_next_movement(candidate_conflict_coordinate, is_next_route_stop=False)
         else:
-            self.handle_next_movement(next_destination_coordinate, True)
+            self.handle_next_movement(next_destination_coordinate, is_next_route_stop=True)
 
         self.drawNextPosition()
 
     def eligible_to_reroute(self):
         
-        # cari di self
-        
-        if self.idle_time <= 50 or self.is_in_station_path() or self.current_state == "delivering_pod":
+        if self.idle_time <= 50 or self.is_in_station_path():
             return False
         
-        # if self.idle_time >50:
-        #     return True
-        
+        # if self.idle_time <= 50 or self.is_in_station_path() or self.current_state == "delivering_pod":
+        #     return False
+
         # Calculate next step coordinates
         next_step_coordinates = self._calculate_next_blocks(
             round(self.pos_x), round(self.pos_y), self.heading, 1, include_self=False)
@@ -366,6 +378,9 @@ class Robot(Object):
         if not robot_front:
             return False
 
+        if self.idle_time > 50 and robot_front['velocity'] == 0 and self.current_state == "delivering_pod":
+            return True 
+        
         # Check if the robot in front is idle
         if robot_front['state'] == "idle":
             return True
@@ -609,7 +624,7 @@ class Robot(Object):
             robots_idle_time.append(robot.idle_time)
 
         # Create Zone based on robots location
-        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods="kmeans")
+        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods="affinity_propagation")
         
         # Calculate Penalty For Each Zone
         penalties = zones.calculate_penalty(robots_location, robots_idle_time, self.universe.get_warehouse_size(), threshold=5)
