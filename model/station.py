@@ -1,9 +1,10 @@
-from typing import List
+from typing import List, Optional
 
 from engine.object import Object
 from engine.netlogo_coordinate import NetLogoCoordinate
 from .order_manager import OrderManager
 from .pod import Pod
+from .order import Order
 
 
 class Station(Object):
@@ -25,7 +26,8 @@ class Station(Object):
         self.order_ids.append(order_id)
 
     def remove_order(self, order_id: int):
-        self.order_ids.remove(order_id)
+        if order_id in self.order_ids:
+            self.order_ids.remove(order_id)
 
     def is_picker_station(self) -> bool:
         return self.station_type == "picker"
@@ -37,7 +39,8 @@ class Station(Object):
         self.incoming_pod.append(pod)
     
     def remove_pod(self, pod):
-        self.incoming_pod.remove(pod)
+        if pod in self.incoming_pod:
+            self.incoming_pod.remove(pod)
 
     def get_skus_in_station(self, order_manager: OrderManager):
         self._skus_in_station(order_manager)
@@ -53,6 +56,13 @@ class Station(Object):
         return
     
     def get_orders_in_station(self, order_manager: OrderManager):
+        orders = []
+        for order_id in self.order_ids:
+            order = order_manager.get_order_by_id(order_id)
+            orders.append(order)
+        return orders
+    
+    def get_orders_in_station(self, order_manager: OrderManager) -> Optional[List[Order]]: 
         orders = []
         for order_id in self.order_ids:
             order = order_manager.get_order_by_id(order_id)

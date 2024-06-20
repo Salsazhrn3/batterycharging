@@ -3,6 +3,7 @@ import pickle
 import os
 import traceback
 from typing import List
+import random
 
 import networkx as nx
 import pandas as pd
@@ -206,32 +207,85 @@ def initStation(universe: Inventory):
 
 
 def initRobots(universe: Inventory):
-    robots = [
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 9},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 9},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-        # {'velocity': 0, 'heading': 270, 'x': 28, 'y': 22},
-        # {'velocity': 0, 'heading': 180, 'x': 45, 'y': 27},
-        # {'velocity': 0, 'heading': 0, 'x': 48, 'y': 11},
-        # {'velocity': 0, 'heading': 0, 'x': 46, 'y': 3},
-    ]
+    
+    num_robot = 20
+    
+    robots = []
+    x_range = (5,43)
+    y_range=(0,30)
+
+    # Initialize a set to keep track of used coordinates
+    used_coordinates = set()
+
+    # Generate the robots with random unique x and y coordinates
+    while len(robots) < num_robot:
+        x = random.randint(x_range[0], x_range[1])
+        y = random.randint(y_range[0], y_range[1])
+        if (x, y) not in used_coordinates:
+            robot = {
+                'velocity': 0,
+                'heading': 0,
+                'x': x,
+                'y': y
+            }
+            robots.append(robot)
+            used_coordinates.add((x, y))
+
+    # for _ in range(num_robot):
+    #     robot = {
+    #         'velocity': 0,
+    #         'heading': 0,
+    #         'x': random.randint(x_range[0], x_range[1]),
+    #         'y': random.randint(y_range[0], y_range[1])
+    #     }
+    #     robots.append(robot)
+    
+    # robots = [
+    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 9},
+    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 8},
+    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 7},
+    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 3},
+    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 15},
+    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 19},
+    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 23},
+    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 24},
+    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 18},
+    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 27},
+    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 4},
+    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 6},
+    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 5},
+    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 17},
+    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 21},
+    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 27},
+    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 25},
+    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 3},
+    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 7},
+    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 14},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 9},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 9},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
+    #     # # {'velocity': 0, 'heading': 270, 'x': 28, 'y': 22},
+    #     # {'velocity': 0, 'heading': 180, 'x': 45, 'y': 27},
+    #     # {'velocity': 0, 'heading': 0, 'x': 48, 'y': 11},
+    #     # {'velocity': 0, 'heading': 0, 'x': 46, 'y': 3},
+    # ]
 
     # Iterate through each robot in the list to initialize and add to the universe
     for r in robots:
@@ -323,8 +377,8 @@ def cluster_backlog_orders(jaccard_similarities, total_station, station_capacity
         else:
             cluster_labels[order_idx] = None
 
-    # print("cluster label:")
-    # print(cluster_labels)
+    print("cluster label:")
+    print(cluster_labels)
 
     return cluster_labels
 
@@ -335,14 +389,36 @@ def assign_cluster_labels(universe: Inventory, data_backlog_order_df, full_order
     temp = float('inf')
     # assign cluster labels to the 'station' 
     new_order = None
+ 
+    # print("data backlog ", data_backlog_order_df)
+    orders_df = pd.read_csv('generated_order_new.csv')
+    
+    file_path = 'assign_order.csv'
+    if os.path.exists(file_path):
+        assign_order_df = pd.read_csv(file_path)
+        # pass
+    else:
+        assign_order_df = orders_df.copy()
+        assign_order_df['assigned_station'] = None
+        assign_order_df['assigned_pod'] = None
+        assign_order_df['status'] = -3
+        assign_order_df.to_csv('assign_order.csv', index=False)      
     
     for index, row in data_backlog_order_df.iterrows():
         order_dum = row['order_id']
         if(temp != order_dum or order_dum == -1):
-            # print("hai cantik")
+            # if(order_dum == -1):
+            #     print("test")
             if(temp != float('inf')):
                 
                 new_order.station_id = station_id
+                print("order: ", new_order.order_id)
+                print("station: ", station_id)
+                assign_order_df.loc[assign_order_df['order_id'] == new_order.order_id, 'assigned_station'] = station_id
+                if(new_order.station_id is not None):
+                    assign_order_df.loc[assign_order_df['order_id'] == new_order.order_id, 'status'] = -1
+                assign_order_df.to_csv('assign_order.csv', index=False)  
+                
                 if station_id is not None:
                     station = universe.station_manager.get_station_by_id(station_id)
                     station.add_order(new_order.order_id)

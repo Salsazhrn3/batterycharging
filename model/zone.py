@@ -64,6 +64,10 @@ class Zone:
         area = [1] * len(self.boundaries)
         robot_count = [1] * len(self.boundaries)
         warehouse_area = warehouse_size[0] * warehouse_size[1]
+        
+        print("idle time: ", idle_time)
+        print("robot locations: ", robots_location)
+        
         for index, zone in enumerate(self.boundaries):
             area[index] = abs(zone[1][0] - zone[0][0]) * abs(zone[1][1] - zone [0][1])
             # print("area: ", area[index])

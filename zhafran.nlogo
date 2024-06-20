@@ -88,8 +88,8 @@ end
 GRAPHICS-WINDOW
 15
 10
-758
-484
+773
+529
 -1
 -1
 15.0
@@ -113,10 +113,10 @@ ticks
 15.0
 
 BUTTON
-400
-510
-483
-543
+1450
+140
+1533
+173
 setup
 setup
 NIL
@@ -130,10 +130,10 @@ NIL
 1
 
 BUTTON
-319
-510
-383
-544
+1355
+150
+1419
+184
 go
 go
 NIL
@@ -147,10 +147,10 @@ NIL
 1
 
 BUTTON
-195
-510
-292
-543
+1226
+150
+1323
+183
 go-forever
 go
 T
@@ -164,10 +164,10 @@ NIL
 1
 
 MONITOR
-505
-500
-668
-557
+1225
+212
+1388
+269
 Order
 order_count
 17
@@ -175,10 +175,10 @@ order_count
 14
 
 MONITOR
-45
-575
-207
-632
+1225
+298
+1387
+355
 Total Energy
 total_energy
 17
@@ -186,10 +186,10 @@ total_energy
 14
 
 MONITOR
-225
-575
-390
-632
+1225
+375
+1390
+432
 Average Energy
 average_total_energy
 17
@@ -197,10 +197,10 @@ average_total_energy
 14
 
 MONITOR
-405
-575
-570
-632
+1225
+450
+1390
+507
 Stop and Go
 _stop
 17
@@ -208,10 +208,10 @@ _stop
 14
 
 MONITOR
-595
-575
-760
-632
+1225
+525
+1390
+582
 Total Turning
 total_turning
 17
@@ -219,10 +219,10 @@ total_turning
 14
 
 BUTTON
-95
-510
-177
-543
+975
+185
+1057
+218
 Setup Py
 setup-py
 NIL
@@ -287,11 +287,11 @@ true
 0
 Polygon -7500403 true true 150 0 0 150 105 150 105 293 195 293 195 150 300 150
 
-arrow-down
+arrow-up
 true
 0
-Line -16777216 false 75 150 150 75
-Line -16777216 false 225 150 150 75
+Line -16777216 false 75 150 150 225
+Line -16777216 false 150 225 225 150
 
 arrow-left
 true
@@ -305,11 +305,11 @@ true
 Line -16777216 false 150 75 225 150
 Line -16777216 false 225 150 150 225
 
-arrow-up
+arrow-down
 true
 0
-Line -16777216 false 75 150 150 225
-Line -16777216 false 150 225 225 150
+Line -16777216 false 75 150 150 75
+Line -16777216 false 225 150 150 75
 
 box
 false
@@ -514,6 +514,12 @@ rail-corner
 true
 0
 Rectangle -16777216 true false 135 135 315 165
+Rectangle -16777216 true false 135 135 165 330
+
+rail-triangle
+true
+0
+Rectangle -16777216 true false 0 135 315 165
 Rectangle -16777216 true false 135 135 165 330
 
 sheep
@@ -750,7 +756,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.4.0
+NetLogo 6.3.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
