@@ -5,8 +5,10 @@ import traceback
 from typing import List
 import random
 
+
 import networkx as nx
 import pandas as pd
+from pandas import DataFrame
 import numpy as np
 
 from pandas import DataFrame
@@ -14,8 +16,10 @@ from sklearn.cluster import KMeans
 
 from engine.netlogo_coordinate import NetLogoCoordinate
 from engine.object import Object
+from model.intersection import Intersection
 from model.inventory import Inventory
 from model.order import Order
+from model.order_generator import *
 from model.pod import Pod
 from model.pod_manager import PodManager
 from model.robot import Robot
@@ -66,15 +70,26 @@ class DirectedGraph:
         if self.node_valid(start) and self.node_valid(end):
             self.graph.add_edge(start, end, weight=weight)
 
-    def dijkstra(self, start, end, penalties, zone_boundary, avoid=None):
+    @staticmethod
+    def get_heading(p1: NetLogoCoordinate, p2: NetLogoCoordinate):
+        if p1.x == p2.x:
+            if p1.y > p2.y:
+                return 180
+            else:
+                return 0
+        elif p1.y == p2.y:
+            if p1.x > p2.x:
+                return 270
+            else:
+                return 90
+
+    def dijkstra_modified(self, start, end, penalties, zone_boundary, avoid=None):
         """Find the shortest path between two nodes using Dijkstra's algorithm, avoiding specified nodes.
 
         Args:
             start (str): The start node.
             end (str): The end node.
             avoid (list, optional): Nodes to avoid in the path.
-            penalties (list): List of zone penalties
-            zone_boundary (list(list(list))): boundary of zones
 
         Returns:
             list or None: The path from start to end if one exists, otherwise None.
@@ -83,7 +98,48 @@ class DirectedGraph:
         G = self.graph.copy()
 
         # Increase the weight of the edges leading to and from the nodes to avoid
-     
+        if avoid:
+            for node in avoid:
+                for neighbor in list(G.neighbors(node)) + list(G.predecessors(node)):
+                    # Increase the weight significantly to discourage using these paths
+                    if G.has_edge(neighbor, node):
+                        G[neighbor][node]['weight'] += 10000
+                    if G.has_edge(node, neighbor):
+                        G[node][neighbor]['weight'] += 10000
+
+        # Increase the weight of edges in every zone based on the penalty
+        for index, zone in enumerate(zone_boundary):
+            for row in range(zone[1][0], zone[0][0]):
+                for col in range(zone[0][1], zone[1][1]):
+                    coordinate_str = f"{row},{col}"
+                    for neighbor in list(G.neighbors(coordinate_str)) + list(G.predecessors(coordinate_str)):
+                        if G.has_edge(neighbor, coordinate_str):
+                            G[neighbor][coordinate_str]['weight'] = penalties[index]
+                        if G.has_edge(coordinate_str, neighbor):
+                            G[coordinate_str][neighbor]['weight'] = penalties[index]
+
+        try:
+            # Use Dijkstra's algorithm to find the shortest path
+            path = nx.shortest_path(G, source=start, target=end, weight='weight', method='bellman-ford')
+            return path
+        except nx.NetworkXNoPath:
+            return None
+
+    def dijkstra(self, start, end, avoid=None):
+        """Find the shortest path between two nodes using Dijkstra's algorithm, avoiding specified nodes.
+
+        Args:
+            start (str): The start node.
+            end (str): The end node.
+            avoid (list, optional): Nodes to avoid in the path.
+
+        Returns:
+            list or None: The path from start to end if one exists, otherwise None.
+        """
+        # Create a copy of the graph so we can modify it without affecting the original
+        G = self.graph.copy()
+
+        # Increase the weight of the edges leading to and from the nodes to avoid
         if avoid:
             for node in avoid:
                 for neighbor in list(G.neighbors(node)) + list(G.predecessors(node)):
@@ -93,18 +149,6 @@ class DirectedGraph:
                     if G.has_edge(node, neighbor):
                         G[node][neighbor]['weight'] += 1000
 
-        for index, zone in enumerate(zone_boundary):
-            for row in range(zone[1][0], zone[0][0]):
-                for col in range(zone[0][1], zone[1][1]):
-                    coordinate_str = f"{col},{row}"
-                    for neighbor in list(G.neighbors(coordinate_str)) + list(G.predecessors(coordinate_str)):
-                        # Increase the weight based on the zone
-                        if G.has_edge(neighbor, coordinate_str):
-                            G[neighbor][coordinate_str]['weight'] = penalties[index]
-                        if G.has_edge(coordinate_str, neighbor):
-                            G[coordinate_str][neighbor]['weight'] = penalties[index]
-        
-
         try:
             # Use Dijkstra's algorithm to find the shortest path
             path = nx.shortest_path(G, source=start, target=end, weight='weight', method='bellman-ford')
@@ -113,7 +157,7 @@ class DirectedGraph:
             return None
 
 
-intersections = []
+intersections: List[Intersection] = []
 
 stations = [
     [2, 33],
@@ -125,61 +169,6 @@ stations = [
 ]
 
 
-def initPod(universe: Inventory):
-    # Access the graphs from the universe object
-    graph = universe.graph
-    graph_pod = universe.graph_pod
-
-    # Open and read the 'pod.csv' file
-    with open('pod.csv') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-
-        # Initialize a counter for the rows (y-coordinate)
-        line_count = 0
-
-        for row in csv_reader:
-            # Initialize the x-coordinate for the start of the row
-            current_x = 0
-
-            for cell_value in row:
-                # Check if the cell indicates a Pod location
-                if cell_value == '1':
-                    # Create a new Pod object and set its position and coordinates
-                    pod = Pod(1)
-                    pod.pos_x = current_x - 1
-                    pod.pos_y = line_count
-                    pod.coordinate = NetLogoCoordinate(pod.pos_x, pod.pos_y)
-
-                    # Add the Pod object to the universe
-                    universe.addObject(pod)
-
-                    # Construct the key for the current Pod based on its coordinates
-                    obj_key = f"{pod.pos_x},{pod.pos_y}"
-
-                    # Add nodes for the Pod in both graphs
-                    graph.add_node(obj_key)
-                    graph_pod.add_node(obj_key)
-
-                    # Determine the key for the neighboring node based on the y-coordinate
-                    obj_key_neighbor = f"{pod.pos_x},{pod.pos_y - 1}"
-                    if (pod.pos_y + 1) % 3 == 0:
-                        obj_key_neighbor = f"{pod.pos_x},{pod.pos_y + 1}"
-
-                    # Add the neighboring node and edges between the Pod and its neighbor in both graphs
-                    graph_pod.add_node(obj_key_neighbor)
-                    graph.add_edge(obj_key, obj_key_neighbor, weight=1)
-                    graph_pod.add_edge(obj_key, obj_key_neighbor, weight=1)
-                    graph_pod.add_edge(obj_key_neighbor, obj_key, weight=1)
-
-                # Move to the next x-coordinate
-                current_x += 1
-
-            # Limit the processing to the first 33 lines
-            if line_count > 32:
-                break
-
-            # Move to the next row (y-coordinate)
-            line_count += 1
 
 
 def initStation(universe: Inventory):
@@ -207,8 +196,8 @@ def initStation(universe: Inventory):
 
 
 def initRobots(universe: Inventory):
-    
-    num_robot = 20
+
+    num_robot = 20 # Number of robots
     
     robots = []
     x_range = (5,43)
@@ -231,62 +220,6 @@ def initRobots(universe: Inventory):
             robots.append(robot)
             used_coordinates.add((x, y))
 
-    # for _ in range(num_robot):
-    #     robot = {
-    #         'velocity': 0,
-    #         'heading': 0,
-    #         'x': random.randint(x_range[0], x_range[1]),
-    #         'y': random.randint(y_range[0], y_range[1])
-    #     }
-    #     robots.append(robot)
-    
-    # robots = [
-    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 9},
-    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 8},
-    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 7},
-    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 3},
-    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 15},
-    #     {'velocity': 0, 'heading': 0, 'x': 42, 'y': 19},
-    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 23},
-    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 24},
-    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 18},
-    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 27},
-    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 4},
-    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 6},
-    #     {'velocity': 0, 'heading': 0, 'x': 41, 'y': 5},
-    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 17},
-    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 21},
-    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 27},
-    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 25},
-    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 3},
-    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 7},
-    #     {'velocity': 0, 'heading': 0, 'x': 40, 'y': 14},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 9},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 9},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # {'velocity': 0, 'heading': 0, 'x': 42, 'y': 5},
-    #     # # {'velocity': 0, 'heading': 270, 'x': 28, 'y': 22},
-    #     # {'velocity': 0, 'heading': 180, 'x': 45, 'y': 27},
-    #     # {'velocity': 0, 'heading': 0, 'x': 48, 'y': 11},
-    #     # {'velocity': 0, 'heading': 0, 'x': 46, 'y': 3},
-    # ]
-
     # Iterate through each robot in the list to initialize and add to the universe
     for r in robots:
         # Create a new Robot instance
@@ -306,19 +239,48 @@ def initRobots(universe: Inventory):
 
 
 def draw_layout(universe):
-    # Check if pod.csv exists in the current directory
+    # Check if generated_pod.csv exists in the current directory
     if os.path.exists('generated_pod.csv'):
+        print("Generated pod already exist, delete generated_pod.csv if you want to change")
         draw_layout_from_generated_file(universe)
     else:
         layout = Layout()
+        # This one to generate new configuration
         layout.generate()
         draw_layout_from_generated_file(universe)
 
 
 def draw_layout_from_generated_file(universe: Inventory):
     draw_storage_from_generated_file(universe)
+
+    # Config Orders
     assign_skus_to_pods(universe.pod_manager)
+    config_orders(
+    initial_order=20, 
+    total_requested_item=500, # Number of SKU in warehouse
+    items_orders_class_configuration={"A": 0.6, "B": 0.3, "C": 0.1}, # Item class configuration in warehouse
+    quantity_range=[1, 12], # Quantity range of number of SKU in each order
+    order_cycle_time=100,  # Number of order per hour
+    order_period_time=2,
+    order_start_arrival_time=5, # Start time of order arrival  
+    date=1,
+    sim_ver=1,        
+    dev_mode=False)
+    
+    # Config Backlog Orders
+    config_orders(
+    initial_order=50, # Initial order in backlog
+    total_requested_item=500, # Number of SKU in warehouse
+    items_orders_class_configuration={"A": 0.6, "B": 0.3, "C": 0.1}, # Item class configuration in warehouse
+    quantity_range=[1, 12], # Quantity range of number of SKU in each order
+    order_cycle_time=100, # Number of order per hour
+    order_period_time=3, # the total hours
+    order_start_arrival_time=5, # Start time of order arrival
+    date=1,  
+    sim_ver=2, 
+    dev_mode=True)
     initRobots(universe)
+    # Assign backlog clustering
     assign_backlog_orders(universe)
 
     pod = list(universe.pod_manager.coordinate_to_pods.values())[0]
@@ -384,14 +346,10 @@ def cluster_backlog_orders(jaccard_similarities, total_station, station_capacity
 
 def assign_cluster_labels(universe: Inventory, data_backlog_order_df, full_order, cluster_labels, station_capacity_df):
     order_dum_to_cluster = dict(zip(full_order.index, cluster_labels))
-    # print("BACKLOG ORDER")
-    # print(data_backlog_order_df)
     temp = float('inf')
-    # assign cluster labels to the 'station' 
     new_order = None
  
-    # print("data backlog ", data_backlog_order_df)
-    orders_df = pd.read_csv('generated_order_new.csv')
+    orders_df = pd.read_csv('generated_order.csv')
     
     file_path = 'assign_order.csv'
     if os.path.exists(file_path):
@@ -404,57 +362,59 @@ def assign_cluster_labels(universe: Inventory, data_backlog_order_df, full_order
         assign_order_df['status'] = -3
         assign_order_df.to_csv('assign_order.csv', index=False)      
     
+    unique_orders = set()
+    order_sku_map = {}
+    new_order = None
     for index, row in data_backlog_order_df.iterrows():
         order_dum = row['order_id']
-        if(temp != order_dum or order_dum == -1):
-            # if(order_dum == -1):
-            #     print("test")
-            if(temp != float('inf')):
-                
-                new_order.station_id = station_id
-                print("order: ", new_order.order_id)
-                print("station: ", station_id)
-                assign_order_df.loc[assign_order_df['order_id'] == new_order.order_id, 'assigned_station'] = station_id
-                if(new_order.station_id is not None):
-                    assign_order_df.loc[assign_order_df['order_id'] == new_order.order_id, 'status'] = -1
-                assign_order_df.to_csv('assign_order.csv', index=False)  
-                
-                if station_id is not None:
-                    station = universe.station_manager.get_station_by_id(station_id)
-                    station.add_order(new_order.order_id)
-
-                universe.order_manager.add_order(new_order)
-
-            new_order = Order(order_dum, 0)
-            temp = order_dum
- 
-        new_order.add_sku(row['item_id'], row['item_quantity'])
         station_id = order_dum_to_cluster[order_dum]
+       
+        if station_id is not None and order_dum not in unique_orders:
+            unique_orders.add(order_dum)
+            new_order = Order(order_dum, 0)
+            # print("order: ", new_order.order_id)
+            # print("station: ", station_id)
+            
+            assign_order_df.loc[assign_order_df['order_id'] == new_order.order_id, 'assigned_station'] = station_id
+            assign_order_df.loc[assign_order_df['order_id'] == new_order.order_id, 'status'] = -1
+            
+            assign_order_df.to_csv('assign_order.csv', index=False)
+            new_order.assign_station(station_id)
+            station = universe.station_manager.get_station_by_id(station_id)
+            universe.order_manager.add_order(new_order)
+            
+            order_sku_map[order_dum] = 0
+
+        if order_dum in unique_orders:
+            order = universe.order_manager.get_order_by_id(order_dum)
+            order.add_sku(row['item_id'], row['item_quantity'])
+            order_sku_map[order_dum] += 1
+        if order_dum in order_sku_map:
+            order = universe.order_manager.get_order_by_id(order_dum)
+            expected_sku_count = data_backlog_order_df[data_backlog_order_df['order_id'] == order_dum].shape[0]
+            if order_sku_map[order_dum] == expected_sku_count:
+                station.add_order(order_dum, order)
     
-  
     return station_capacity_df
 
 def assign_backlog_orders(universe: Inventory):
-
     # open file order
-    order_path = "generated_order_new.csv"
+    order_path = "generated_order.csv"
     data_order_df = pd.read_csv(order_path)
+
     # filter order_id < 0
     unassigned_backlog_order = data_order_df.loc[(data_order_df['order_id'] < 0)].sort_values(by=['order_id']).reset_index(drop=True)
 
     columns = ['id_station', 'capacity_left']
     station_id_cap_df = pd.DataFrame(columns=columns)
 
-
-
     for station in universe.station_manager.stations:
-        # mask = station.station_id.str.contains(r'^picker-\d+$', regex=True)
-        # if(mask):
         id = station.station_id
         cap = station.max_orders - len(station.order_ids)
-
-        station_id_cap_df = station_id_cap_df.append({'id_station': id, 'capacity_left': cap}, ignore_index=True)
-
+        
+        new_row = pd.DataFrame({'id_station': [id], 'capacity_left': [cap]})
+        # station_id_cap_df = station_id_cap_df.append({'id_station': id, 'capacity_left': cap}, ignore_index=True)
+        station_id_cap_df = pd.concat([station_id_cap_df, new_row], ignore_index=True)
     is_picker = station_id_cap_df['id_station'].str.startswith('picker')
 
     station_id_cap_df = station_id_cap_df[is_picker]
@@ -469,10 +429,14 @@ def assign_backlog_orders(universe: Inventory):
 
         station_id_cap_df = assign_cluster_labels(universe, unassigned_backlog_order, full_order, cluster_labels, station_id_cap_df)
 
+
+
 def draw_storage_from_generated_file(universe: Inventory):
     station_picker_counter = 1
     station_replenish_counter = 1
-    pod_counter = 1
+    pods_horizontal_length = 5
+    pods_vertical_length = 2
+    pod_counter = 0
     graph = DirectedGraph()
     graph_pod = DirectedGraph()
     graph_pod.key = 'pod'
@@ -483,11 +447,12 @@ def draw_storage_from_generated_file(universe: Inventory):
     total_cols = 0
     for y, row in data.iterrows():
         # Invert Y only to draw
-        total_cols = 0
         for x, value in row.items():
             obj = Object()
             obj.object_type = 'way-direction'
             obj_key = f"{x},{y}"
+            obj.pos_x = x
+            obj.pos_y = y
 
             obj_left_coordinate = f"{x - 1},{y}"
             obj_right_coordinate = f"{x + 1},{y}"
@@ -500,6 +465,8 @@ def draw_storage_from_generated_file(universe: Inventory):
             obj_below_value = data.iloc[y + 1, x] if y < total_rows - 1 else None
 
             weight = 1
+            turning_weight = 5
+            intersection_weight = 4
             if x <= 7:
                 weight = 3
 
@@ -530,63 +497,112 @@ def draw_storage_from_generated_file(universe: Inventory):
                     graph_pod.add_edge(obj_key, obj_below_coordinate, weight=100)
             elif value == 3:
                 obj.shape = 'empty-space'
-                intersections.append([obj.pos_x, obj.pos_y])
+
+                intersection = Intersection(NetLogoCoordinate(x, y))
+                approaching_path_coordinates = []
+
+                if obj_right_value in [4, 6, 7]:
+                    right_x = x + 1
+                    while data.iloc[y, right_x] in [4, 6, 7]:
+                        approaching_path_coordinates.append((right_x, y))
+                        right_x += 1
+
+                    if data.iloc[y, right_x] == 3:
+                        intersection.add_connected_intersection_id(right_x, y)
+                if obj_left_value in [5, 6, 7]:
+                    left_x = x - 1
+                    while data.iloc[y, left_x] in [5, 6, 7]:
+                        approaching_path_coordinates.append((left_x, y))
+                        left_x -= 1
+
+                    if data.iloc[y, left_x] == 3:
+                        intersection.add_connected_intersection_id(left_x, y)
+                if obj_below_value == 6:
+                    below_y = y + 1
+                    while data.iloc[below_y, x] == 6:
+                        approaching_path_coordinates.append((x, below_y))
+                        below_y += 1
+
+                    if data.iloc[below_y, x] == 3:
+                        intersection.add_connected_intersection_id(x, below_y)
+                if obj_above_value == 7:
+                    above_y = y - 1
+                    while data.iloc[above_y, x] == 7:
+                        approaching_path_coordinates.append((x, above_y))
+                        above_y -= 1
+
+                    if data.iloc[above_y, x] == 3:
+                        intersection.add_connected_intersection_id(x, above_y)
+
+                for each_approaching_coordinate in approaching_path_coordinates:
+                    intersection.approaching_path_coordinates.append(each_approaching_coordinate)
+
+                if obj.pos_x == 15:
+                    intersection.use_reinforcement_learning = True
+                    if obj.pos_y == 0:
+                        intersection.set_RL_model_name("BOTTOM")
+                    elif obj.pos_y == 30:
+                        intersection.set_RL_model_name("TOP")
+                    else:
+                        intersection.set_RL_model_name("MIDDLE")
+
+                universe.intersection_manager.add_intersection(intersection)
 
                 if obj_left_value == 4 or obj_right_value == 4:
-                    graph.add_edge(obj_key, obj_left_coordinate, weight=weight)
-                    graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
+                    graph.add_edge(obj_key, obj_left_coordinate, weight=intersection_weight)
+                    graph_pod.add_edge(obj_key, obj_left_coordinate, weight=intersection_weight)
                 elif obj_left_value == 5 or obj_right_value == 5:
-                    graph.add_edge(obj_key, obj_right_coordinate, weight=weight)
-                    graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
+                    graph.add_edge(obj_key, obj_right_coordinate, weight=intersection_weight)
+                    graph_pod.add_edge(obj_key, obj_right_coordinate, weight=intersection_weight)
 
                 if obj_above_value == 6 or obj_above_value == 6:
-                    graph.add_edge(obj_key, obj_above_coordinate, weight=weight)
-                    graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
+                    graph.add_edge(obj_key, obj_above_coordinate, weight=intersection_weight)
+                    graph_pod.add_edge(obj_key, obj_above_coordinate, weight=intersection_weight)
                 elif obj_below_value == 7 or obj_below_value == 7:
-                    graph.add_edge(obj_key, obj_below_coordinate, weight=weight)
-                    graph_pod.add_edge(obj_key, obj_below_coordinate, weight=weight)
+                    graph.add_edge(obj_key, obj_below_coordinate, weight=intersection_weight)
+                    graph_pod.add_edge(obj_key, obj_below_coordinate, weight=intersection_weight)
 
                 if obj_left_value == 6 or obj_left_value == 7:
-                    graph.add_edge(obj_key, obj_left_coordinate, weight=weight)
-                    graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
+                    graph.add_edge(obj_key, obj_left_coordinate, weight=intersection_weight)
+                    graph_pod.add_edge(obj_key, obj_left_coordinate, weight=intersection_weight)
                 elif obj_right_value == 6 or obj_right_value == 7:
-                    graph.add_edge(obj_key, obj_right_coordinate, weight=weight)
-                    graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
+                    graph.add_edge(obj_key, obj_right_coordinate, weight=intersection_weight)
+                    graph_pod.add_edge(obj_key, obj_right_coordinate, weight=intersection_weight)
             elif value == 4:
                 obj.shape = 'arrow-left'
                 graph.add_edge(obj_key, obj_left_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
 
-                graph.add_edge(obj_key, obj_above_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_above_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=100)
-                graph.add_edge(obj_key, obj_below_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_below_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_below_coordinate, weight=100)
             elif value == 5:
                 obj.shape = 'arrow-right'
                 graph.add_edge(obj_key, obj_right_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
 
-                graph.add_edge(obj_key, obj_above_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_above_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=100)
-                graph.add_edge(obj_key, obj_below_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_below_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_below_coordinate, weight=100)
             elif value == 6:
                 obj.shape = 'arrow-up'
                 graph.add_edge(obj_key, obj_above_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
 
-                graph.add_edge(obj_key, obj_left_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_left_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=100)
-                graph.add_edge(obj_key, obj_right_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_right_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=100)
             elif value == 7:
                 obj.shape = 'arrow-down'
                 graph.add_edge(obj_key, obj_below_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_below_coordinate, weight=weight)
 
-                graph.add_edge(obj_key, obj_left_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_left_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=100)
-                graph.add_edge(obj_key, obj_right_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_right_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=100)
             elif value == 11 or value == 21:
                 obj.shape = 'person-red'
@@ -603,7 +619,8 @@ def draw_storage_from_generated_file(universe: Inventory):
                     obj.pos_x = x
                     obj.pos_y = y
                     obj.coordinate = NetLogoCoordinate(x, y)
-                    obj.path = construct_station_path(data, x, y)
+                    obj.short_path = construct_station_path(data, x, y, station_type='picking')
+                    obj.long_path = construct_station_path(data, x, y, station_type='picking', short_path=False)
                     universe.station_manager.add_station(obj)
                 elif obj_right_value == 21:
                     obj = Station(station_replenish_counter, "replenishment")
@@ -611,11 +628,15 @@ def draw_storage_from_generated_file(universe: Inventory):
                     obj.pos_x = x
                     obj.pos_y = y
                     obj.coordinate = NetLogoCoordinate(x, y)
-                    # obj.path = construct_station_path(data, x, y)
+                    obj.short_path = construct_station_path(data, x, y, station_type='replenishment')
+                    obj.long_path = construct_station_path(data, x, y, station_type='replenishment', short_path=False)
                     universe.station_manager.add_station(obj)
 
-                obj.shape = 'rail'
-                obj.heading = 90
+                obj.shape = 'rail-triangle'
+                if value == 14:
+                    obj.heading = 270
+                elif value == 24:
+                    obj.heading = 90
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
             elif value == 16:
                 obj.shape = 'rail-corner'
@@ -623,6 +644,14 @@ def draw_storage_from_generated_file(universe: Inventory):
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
             elif value == 17:
                 obj.shape = 'rail-corner'
+                graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
+            elif value == 18:
+                obj.shape = 'rail-corner'
+                obj.heading = 180
+                graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
+            elif value == 19:
+                obj.shape = 'rail-corner'
+                obj.heading = 90
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
             elif value == 26:
                 obj.shape = 'rail-corner'
@@ -632,6 +661,14 @@ def draw_storage_from_generated_file(universe: Inventory):
                 obj.shape = 'rail-corner'
                 obj.heading = 90
                 graph_pod.add_edge(obj_key, obj_below_coordinate, weight=weight)
+            elif value == 28:
+                obj.shape = 'rail-corner'
+                obj.heading = 270
+                graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
+            elif value == 29:
+                obj.shape = 'rail-corner'
+                obj.heading = 0
+                graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
             elif value == 99:
                 obj.shape = 'empty-space'
             else:
@@ -644,22 +681,32 @@ def draw_storage_from_generated_file(universe: Inventory):
             obj.pos_y = y
             total_cols += 1
             universe.addObject(obj)
+    
     universe.set_warehouse_size([total_rows, total_cols])
 
-
-def construct_station_path(data: DataFrame, start_x, start_y):
+def construct_station_path(data: DataFrame, start_x, start_y, station_type:str, short_path=True):
     station_path: List[NetLogoCoordinate] = [NetLogoCoordinate(start_x, start_y)]
+
+    if station_type not in ['picking', 'replenishment']:
+        raise ValueError("station_type must be either 'picking' or 'replenishment'")
+
+    x_increment = 1 if station_type == 'picking' else -1
+    if not short_path:
+        station_path.insert(0, NetLogoCoordinate(start_x + 1 * x_increment, start_y))
+        station_path.insert(0, NetLogoCoordinate(start_x + 2 * x_increment, start_y))
+        station_path.insert(0, NetLogoCoordinate(start_x + 2 * x_increment, start_y + 1))
+        station_path.insert(0, NetLogoCoordinate(start_x + 1 * x_increment, start_y + 1))
 
     # go to bottom
     y, x = start_y + 1, start_x
-    while data.iloc[y, x] == 14 or data.iloc[y, x] == 17:
+    while data.iloc[y, x] in (14, 17, 24, 27):
         station_path.insert(0, NetLogoCoordinate(x, y))
 
-        if data.iloc[y, x] == 17:
-            x += 1
-            while data.iloc[y, x] == 13:
+        if data.iloc[y, x] in (17, 27):
+            x += x_increment
+            while data.iloc[y, x] in (13, 23):
                 station_path.insert(0, NetLogoCoordinate(x, y))
-                x += 1
+                x += x_increment
 
         y += 1
 
@@ -681,41 +728,74 @@ def add_all_direction_paths(graph, obj_key, weight):
 
 
 def assign_skus_to_pods(pod_manager):
-    # Check if pod.csv exists in the current directory
-    if os.path.exists('pod_sku.csv'):
+    # Check if pods.csv exists in the current directory
+    if os.path.exists('pods.csv'):
         assign_skus_to_pods_from_file(pod_manager)
     else:
-        PodGenerator(pod_manager).generate()
+        # Fungsi generate pods.csv
+        # PodGenerator(pod_manager).generate()
+        PodGenerator(pod_types=[0], pod_num=[300], total_sku=500, 
+                      items_class_conf={"A": 0.1, "B": 0.3, "C": 0.6},
+                      items_pods_inventory_levels={"A": 0.4, "B": 0.5, "C": 0.6},
+                      items_warehouse_inventory_levels={"A": 0.4, "B": 0.5, "C": 0.6},
+                      items_pods_class_conf={"A": 0.6, "B": 0.3, "C": 0.1},
+                      pod_manager=pod_manager,
+                      dev_mode=False).generate()
         assign_skus_to_pods_from_file(pod_manager)
 
 
 def assign_skus_to_pods_from_file(pod_manager: PodManager):
-    with open('pod_sku.csv', mode='r', newline='') as file:
+    items_pd = pd.read_csv('items.csv')
+    
+    with open('pods.csv', mode='r', newline='') as file:
         reader = csv.DictReader(file)
         for row in reader:
             pod_id = int(row['pod_id'])
-            sku = int(row['sku'])
-            limit_qty = int(row['limit_qty'])
-            current_qty = int(row['current_qty'])
-            threshold = int(row['threshold'])
+            sku = int(row['item'])
+            limit_qty = int(row['max_qty'])
+            current_qty = int(row['qty'])
+            threshold = items_pd.loc[items_pd['item_id'] == sku, 'item_pod_inventory_level']
 
             # Find the pod by id
             pod: Pod = pod_manager.get_pod_by_id(pod_id)
             pod.add_sku(sku, limit_qty=limit_qty, current_qty=current_qty, threshold=threshold)
             pod_manager.add_sku_to_pod(sku, pod)
+             
+            # Add SKU Data of level
+            pod_manager.add_sku_data(sku,current_qty,limit_qty)
+
+    csv_file = 'skus_data.csv'
+    if os.path.exists(csv_file):
+        os.remove(csv_file)
+    skus_data = pod_manager.get_all_skus_data()
+    
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['item_id', 'current_global_qty', 'max_global_qty', 'global_inv_level'])
+        for key, value in skus_data.items():
+            writer.writerow([key, value['current_global_qty'], value['max_global_qty'], value['global_inv_level']])
+
+    print(f"Data has been saved to {csv_file}")
+    df = pd.read_csv(csv_file)
+    df_sorted = df.sort_values(by='item_id')
+    sorted_csv_file = 'sorted_skus_data.csv'
+    df_sorted.to_csv(sorted_csv_file, index=False)
 
 
 def setup():
     try:
         # Initialize the simulation universe
+        assignment_path = "assign_order.csv"
+        if os.path.exists(assignment_path):
+            os.remove(assignment_path)
         universe = Inventory()
-
+        
         # Populate the universe with objects and connections
         draw_layout(universe)
 
         # Set simulation parameters
         universe.tick_to_second = 0.15
-        universe.intersections = intersections  # Ensure 'intersections' is defined earlier
+        # print(universe.intersection_manager.intersections[0].intersection_coordinate)
 
         # Generate initial results
         next_result = universe.generateResult()
@@ -734,7 +814,7 @@ def setup():
 
 def tick():
     try:
-        print("========tick========")
+        # print("========tick========")
 
         # Load the simulation state
         with open('netlogo.state', 'rb') as file:

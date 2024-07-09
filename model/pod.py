@@ -11,7 +11,19 @@ class Pod(Object):
         self.skus = {}
         self.is_idle = True
         self.station = None
+        self.need_replenishment = False
         super().__init__()
+
+    def __eq__(self, other):
+        if isinstance(other, Pod):
+            return self.pod_id == other.pod_id
+        return False
+
+    def __hash__(self):
+        return hash(self.pod_id)
+
+    def __repr__(self):
+        return f"Pod({self.pod_id})"
 
     def add_sku(self, sku, limit_qty, current_qty, threshold):
         """Add a new SKU with its limit, current quantity, and threshold."""
@@ -26,11 +38,12 @@ class Pod(Object):
         replenishment station."""
         count_below_threshold = 0
         total_skus = len(self.skus)
+        alpha = total_skus / 2
         for details in self.skus.values():
-            if details['current_qty'] <= details['threshold']:
+            if details['current_qty']/details['limit_qty'] <= details['threshold']:
                 count_below_threshold += 1
 
-        if count_below_threshold >= total_skus / 2:
+        if count_below_threshold >= alpha:
             return True
         return False
 
@@ -49,3 +62,14 @@ class Pod(Object):
         """Return a list of SKUs that have not yet been assigned a pod."""
         unassigned_skus = [sku for sku, details in self.skus.items() if details['pod'] is None]
         return unassigned_skus
+
+    def set_pod_station(self, station):
+        self.station = station
+        return
+    
+    def remove_pod_station(self):
+        self.station = None
+        return
+
+    def get_skus_in_pod(self):
+        return self.skus

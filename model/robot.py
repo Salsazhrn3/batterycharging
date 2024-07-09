@@ -4,9 +4,13 @@ from typing import Optional, List
 from engine.heading import Heading
 from engine.netlogo_coordinate import NetLogoCoordinate
 from engine.object import Object
+from engine.util import *
+from .intersection import Intersection
 from .robot_job import RobotJob
+from .station import Station
 from .traffic_policy import TrafficPolicy
 from .zone import Zone
+
 
 class Robot(Object):
     # netlogo related
@@ -46,6 +50,13 @@ class Robot(Object):
         self.taking_pod_delay = 0
         self.delay_per_task = 10
         self.idle_time = 0
+        self.current_intersection_id = None
+        self.future_intersection_id = None
+        self.previous_intersection_id = None
+        self.current_intersection_energy_consumption = 0
+        self.current_intersection_stop_and_go = 0
+        self.current_intersection_start_time = None
+        self.current_intersection_finish_time = None
         super().__init__()
 
     @staticmethod
@@ -253,25 +264,20 @@ class Robot(Object):
 
     def picking_item_in_pod(self):
         if self.job is not None and self.is_being_process_on_station():
-            self.job.picking_delay -= 1
+            self.job.decrement_delay()
             return True
 
     def is_in_station_path(self):
         if self.job is not None:
-            for coord in self.job.station_path:
+            station: Station = self.universe.station_manager.get_station_by_id(self.job.station_id)
+            for coord in station.get_path():
                 if round(self.pos_x) == coord.x and round(self.pos_y) == coord.y:
                     return True
 
     def is_being_process_on_station(self):
-        return self.job.picking_delay > 0 and self.close_enough(self.job.station_coordinate, 0.1)
-
-    def is_in_station_start_gate(self):
-        gate_coord = self.job.station_path[0]
-        return self.pos_x is gate_coord.x and self.pos_y is gate_coord.y
-
-    def is_in_station_finish_gate(self):
-        gate_coord = self.job.station_path[-1]
-        return self.pos_x is gate_coord.x and self.pos_y is gate_coord.y
+        station: Station = self.universe.station_manager.get_station_by_id(self.job.station_id)
+        return self.job.is_being_processed() and self.close_enough(
+            station.coordinate, 0.1)
 
     def movementPlan(self):
         if self.picking_item_in_pod():
@@ -283,15 +289,21 @@ class Robot(Object):
 
         if self.eligible_to_reroute():
             if self.current_state == "taking_pod":
-                self.set_move(self.route_stop_points[-1], self.universe.graph, avoid_front=True)
+                self.set_move(self.route_stop_points[-1], self.universe.graph, avoid_side=True)
             elif self.current_state == "delivering_pod" or self.current_state == "returning_pod":
-                self.set_move(self.route_stop_points[-1], self.universe.graph_pod, avoid_front=True)
+                self.set_move(self.route_stop_points[-1], self.universe.graph_pod, avoid_side=True)
+            elif self.current_state == "station_processing":
+                station: Station = self.universe.station_manager.get_station_by_id(self.job.station_id)
+                station.update_robot_route_type(self.robotName())
+                path = station.get_sub_path(self.robotName(), round(self.pos_x), round(self.pos_y))
+                self.setPath(self.transform_coords_to_list(path))
 
             self.idle_time = 0
 
-        print("ahaha: ", self.route_stop_points[0])
+        if not self.route_stop_points:
+            return
+
         next_destination_coordinate = self.route_stop_points[0]
-        
 
         if isinstance(next_destination_coordinate, Heading):
             self.handle_directional(next_destination_coordinate)
@@ -302,7 +314,7 @@ class Robot(Object):
             return
 
         candidate_conflict_coordinate = self.handle_conflicts(next_destination_coordinate)
-        
+
         self.execute_move(candidate_conflict_coordinate, next_destination_coordinate)
 
     def update_idle_state(self):
@@ -311,8 +323,10 @@ class Robot(Object):
         self.acceleration = 0
         self.universe.landscape.setObject(self.robotName(), self.pos_x, self.pos_y, self.velocity,
                                           self.acceleration, self.heading, self.current_state)
-        # self.universe.landscape.objects.values()
-    
+
+        if self.current_intersection_id:
+            self.current_intersection_stop_and_go += 1
+
     def handle_conflicts(self, next_destination_coordinate):
         candidate_conflict_coordinate = None
         if isinstance(next_destination_coordinate, NetLogoCoordinate) and not self.is_in_station_path():
@@ -351,7 +365,7 @@ class Robot(Object):
                                 meeting_coordinate, next_destination_coordinate)
 
         return candidate_conflict_coordinate
-    
+
     def execute_move(self, candidate_conflict_coordinate, next_destination_coordinate):
         self.idle_time = 0
         if candidate_conflict_coordinate and candidate_conflict_coordinate != next_destination_coordinate:
@@ -362,12 +376,16 @@ class Robot(Object):
         self.drawNextPosition()
 
     def eligible_to_reroute(self):
-        
-        if self.idle_time <= 50 or self.is_in_station_path():
+        if self.idle_time <= 50 or self.current_state == "delivering_pod":
             return False
-        
-        # if self.idle_time <= 50 or self.is_in_station_path() or self.current_state == "delivering_pod":
-        #     return False
+
+        if self.is_in_station_path():
+            station: Station = self.universe.station_manager.get_station_by_id(self.job.station_id)
+
+            if self.current_state == "station_processing" and station.has_route_changed(self.robotName()):
+                return True
+            else:
+                return False
 
         # Calculate next step coordinates
         next_step_coordinates = self._calculate_next_blocks(
@@ -378,9 +396,6 @@ class Robot(Object):
         if not robot_front:
             return False
 
-        if self.idle_time > 50 and robot_front['velocity'] == 0 and self.current_state == "delivering_pod":
-            return True 
-        
         # Check if the robot in front is idle
         if robot_front['state'] == "idle":
             return True
@@ -440,18 +455,27 @@ class Robot(Object):
         if next_destination_coordinate.x == round(self.pos_x) and next_destination_coordinate.y == round(self.pos_y):
             return False
 
-        return self.path_blocked_by_robot()
+        return self.path_blocked()
 
-    def path_blocked_by_robot(self):
+    def path_blocked(self):
         next_step_coordinates = self._calculate_next_blocks(round(self.pos_x), round(self.pos_y),
                                                             self.heading, 1, include_self=False)
 
         if not self.is_aligned_with_heading(next_step_coordinates):
             return False
 
-        if round(self.pos_y) == 58:
-            print(self.robotName())
+        return (self.path_blocked_by_intersection(next_step_coordinates)
+                or self.path_blocked_by_robot(next_step_coordinates))
 
+    def path_blocked_by_intersection(self, next_step_coordinates):
+        for next_x, next_y in next_step_coordinates:
+            intersection = self.universe.intersection_manager.get_intersection_by_coordinate(next_x, next_y)
+            if (intersection and self.close_enough(intersection.intersection_coordinate, 1)
+                    and not intersection.is_allowed_to_move(self.heading)):
+                return True
+        return False
+
+    def path_blocked_by_robot(self, next_step_coordinates):
         neighbors = self.universe.landscape.getNeighborObject(round(self.pos_x), round(self.pos_y), 2)
         for neighbor in neighbors:
             if self.get_robot_by_name(neighbor['label']) == self:
@@ -529,7 +553,7 @@ class Robot(Object):
             self.update_motion_parameters(current_coord, next_destination_coordinate)
 
     def update_position(self, coordinate):
-        # Update robot's position and movement parameters to match the coordinate
+        # Update robot's position and movement parameters to match the intersection_coordinate
         self.pos_x = round(coordinate.x)
         self.pos_y = round(coordinate.y)
         self.coordinate = NetLogoCoordinate(self.pos_x, self.pos_y)
@@ -544,15 +568,19 @@ class Robot(Object):
             if self.current_state == "delivering_pod":
                 self.set_move_to_station_gate()
             elif self.current_state == "returning_pod":
+                station: Station = self.universe.station_manager.get_station_by_id(self.job.station_id)
+                station.remove_robot(self.robotName())
                 self.set_move(self.job.pod_coordinate, self.universe.graph_pod, need_neutralize_robot=True)
             elif self.current_state == "station_processing":
-                self.setPath(self.transform_coords_to_list(self.job.station_path))
+                station: Station = self.universe.station_manager.get_station_by_id(self.job.station_id)
+                station.add_robot(self.robotName())
+                self.setPath(self.transform_coords_to_list(station.get_robot_route(self.robotName())))
 
         self.universe.landscape.setObject(self.robotName(), self.pos_x, self.pos_y, self.velocity, self.acceleration,
                                           self.heading, self.current_state)
 
     def update_motion_parameters(self, current_coord, next_destination_coordinate):
-        # Adjust robot's acceleration based on proximity to the next coordinate
+        # Adjust robot's acceleration based on proximity to the next intersection_coordinate
         self.acceleration = 1
         deceleration_buffer = 0.5
         distance_to_stop = self._calculateTwoPoint(current_coord, next_destination_coordinate)
@@ -570,7 +598,8 @@ class Robot(Object):
         initial_velocity = self.velocity
         initial_acceleration = self.acceleration
 
-        self.energy_consumption += self.calculateEnergy(initial_velocity, initial_acceleration)
+        energy = self.calculateEnergy(initial_velocity, initial_acceleration)
+        self.energy_consumption += energy
 
         if self.velocity != 0:
             distance_delta = self.velocity * self.universe.tick_to_second
@@ -591,55 +620,152 @@ class Robot(Object):
         # for traffic policy purposes, report states to the manager
         self.universe.landscape.setObject(self.robotName(), self.pos_x, self.pos_y, self.velocity, self.acceleration,
                                           self.heading, self.current_state)
+        self.update_intersection_information(energy)
+
+    def update_intersection_information(self, energy):
+        intersection_id = self.universe.intersection_manager.find_intersection_by_path_coordinate(round(self.pos_x),
+                                                                                                  round(self.pos_y))
+        if intersection_id:
+            if self.current_intersection_id == intersection_id:
+                self.update_current_intersection(energy)
+            else:
+                self.finalize_current_intersection()
+
+                self.start_new_intersection(intersection_id)
+        else:
+            self.finalize_current_intersection()
+
+            self.reset_intersection_tracking()
+
+    def update_current_intersection(self, energy):
+        self.current_intersection_energy_consumption += energy
+
+        intersection: Intersection = self.universe.intersection_manager.find_intersection_by_id(
+            self.current_intersection_id)
+        intersection.update_robot(self)
+
+    def finalize_current_intersection(self):
+        if self.current_intersection_id is None:
+            return
+
+        # Mark the finish time for the current intersection
+        self.current_intersection_finish_time = self.universe._tick
+        # Log the intersection information to CSV
+
+        intersection: Intersection = self.universe.intersection_manager.find_intersection_by_id(
+            self.current_intersection_id)
+
+        if intersection.should_save_robot_info():
+            self.insert_robot_intersection_information_to_csv(intersection)
+
+        intersection.remove_robot(self)
+
+    def start_new_intersection(self, intersection_id):
+        # Set the new intersection ID and reset the energy consumption
+        self.current_intersection_id = intersection_id
+        self.current_intersection_energy_consumption = 0
+        self.current_intersection_start_time = self.universe._tick
+
+        intersection: Intersection = self.universe.intersection_manager.find_intersection_by_id(
+            self.current_intersection_id)
+        intersection.add_robot(self)
+
+    def reset_intersection_tracking(self):
+        # Reset all intersection-related data
+        self.current_intersection_id = None
+        self.current_intersection_energy_consumption = 0
+        self.current_intersection_stop_and_go = 0
+        self.current_intersection_start_time = 0
+        self.current_intersection_finish_time = 0
+
+    def insert_robot_intersection_information_to_csv(self, intersection: Intersection):
+        header = ["robot_name", "robot_state", "robot_destination", "intersection_start_time",
+                  "intersection_finish_time", "intersection_id",
+                  "energy_consumption_intersection", "queueing_robot"]
+        data = [self.robotName(), self.current_state, self.route_stop_points[-1], self.current_intersection_start_time,
+                self.current_intersection_finish_time, self.current_intersection_id,
+                self.current_intersection_energy_consumption,
+                intersection.robot_count()]
+
+        write_to_csv("intersection-energy-consumption.csv", header, data,
+                     self.universe.landscape.current_date_string)
 
     def assign_job_and_set_move_to_take_pod(self, job: RobotJob):
         self.job = job
 
         self.set_move_to_take_pod()
 
+    def assign_job_and_set_move_to_station(self, job: RobotJob):
+        self.job = job
+        self.current_state = "taking_pod"
+        self.route_stop_points = None
+        self.advance_state_if_needed()
+        self.taking_pod_delay = 0
+
     def set_move_to_take_pod(self):
         self.set_move(self.job.pod_coordinate, graph=self.universe.graph, need_neutralize_robot=False)
         self.current_state = "taking_pod"
 
     def set_move_to_station_gate(self):
-        self.set_move(self.job.station_path[0], graph=self.universe.graph_pod, need_neutralize_robot=False)
+        station: Station = self.universe.station_manager.get_station_by_id(self.job.station_id)
+        self.set_move(station.get_path()[0], graph=self.universe.graph_pod, need_neutralize_robot=False)
 
-    def set_move(self, dest: NetLogoCoordinate, graph, need_neutralize_robot: bool = False, avoid_front: bool = False):
+    def set_move(self, dest: NetLogoCoordinate, graph, need_neutralize_robot: bool = False, avoid_side: bool = False):
         start = self.coordinate_to_string_key(round(self.pos_x), round(self.pos_y))
         end = self.coordinate_to_string_key(dest.x, dest.y)
 
         if need_neutralize_robot:
             self.neutralizeRobotState()
 
-        # Get robot locations
-        robot_objects = self.universe.landscape.getRobotObject()
-        robots_location = [[info['x'], info['y']] for info in robot_objects.values() if info['state'] != 'station_processing']
-        
-        robots_idle_time = []
-        robot_ob = []
-        if len(robots_location) > 0:
-            robot_ob = self.get_robots_by_coords(robots_location)
-
-        for robot in robot_ob:
-            robots_idle_time.append(robot.idle_time)
-
-        # Create Zone based on robots location
-        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods="affinity_propagation")
-        
-        # Calculate Penalty For Each Zone
-        penalties = zones.calculate_penalty(robots_location, robots_idle_time, self.universe.get_warehouse_size(), threshold=5)
-        zone_boundary = zones.get_boundary()
         nodes_to_avoid = []
+        if avoid_side:
+            avoid_coords = self.calculate_all_directions_next_blocks(round(self.pos_x), round(self.pos_y), 1,
+                                                                     include_self=False)
+            for avoid_coord in avoid_coords:
+                if self.universe.landscape.get_neighbor_object(*avoid_coord) is None:
+                    continue
 
-        if avoid_front:
-            avoid_coord = self._calculate_next_blocks(round(self.pos_x), round(self.pos_y),
-                                                      self.heading, 1, include_self=False)
-            nodes_to_avoid.append(self.coordinate_to_string_key(*avoid_coord[0]))
+                nodes_to_avoid.append(self.coordinate_to_string_key(*avoid_coord))
 
-        node_routes = graph.dijkstra(start, end, penalties, zone_boundary, nodes_to_avoid)
+        node_routes = None
+        if self.universe.zoning:
+            zone_boundary, penalties = self.create_zone(method="kmeans")
+            node_routes = graph.dijkstra_modified(start,end, penalties, zone_boundary, nodes_to_avoid)
+        else:
+            node_routes = graph.dijkstra(start, end, nodes_to_avoid) # This one is baseline
+        
         self.setPath(self._transformRouteToList(node_routes))
 
+    def create_zone(self, method):
+        robot_objects = self.universe.landscape.get_robot_object()
+        robots_location = [[info['x'], info['y']] for info in robot_objects.values() if info['state'] != 'station_processing']
+        robots_idle_time = []
+        robot_list = []
+        if len(robots_location) > 0:
+            robot_list = self.get_robots_by_coords(robots_location)
+
+        for robot in robot_list:
+            robots_idle_time.append(robot.idle_time)
+        
+        zones = Zone(robots_location, self.universe.get_warehouse_size(), methods=method)
+        penalties = zones.calculate_penalty(robots_location, robots_idle_time, self.universe.get_warehouse_size(), threshold=5)
+        zone_boundary = zones.get_boundary()
+        return zone_boundary, penalties
+
     # utility functions
+    
+    @staticmethod
+    def calculate_all_directions_next_blocks(x, y, block_count=5, include_self=False):
+        headings = [0, 90, 180, 270]
+        result = []
+
+        for heading in headings:
+            blocks = Robot._calculate_next_blocks(x, y, heading, block_count, include_self)
+            for block in blocks:
+                result.append(block)
+
+        return result
+    
     @staticmethod
     def getHeading(p1: NetLogoCoordinate, p2: NetLogoCoordinate):
         if p1.x == p2.x:
@@ -681,6 +807,18 @@ class Robot(Object):
     @staticmethod
     def robotID(robot_name):
         return int(robot_name.split('-')[1])
+
+    @staticmethod
+    def calculate_all_directions_next_blocks(x, y, block_count=5, include_self=False):
+        headings = [0, 90, 180, 270]
+        result = []
+
+        for heading in headings:
+            blocks = Robot._calculate_next_blocks(x, y, heading, block_count, include_self)
+            for block in blocks:
+                result.append(block)
+
+        return result
 
     @staticmethod
     def _calculate_next_blocks(x, y, heading, block_count=5, include_self=False):

@@ -5,15 +5,12 @@ class Order:
         self.process_start_time = -1
         self.order_complete_time = -1
         self.station_id = None
-        self.status = -3
         self.skus = {}
+        self.status = -3
 
-    def assign_station(self, station_id: int):
+
+    def assign_station(self, station_id):
         self.station_id = station_id
-        self.status = -1
-
-    def assign_pod(self):
-        self.status = 0
 
     def add_sku(self, sku, total_quantity):
         self.skus[sku] = {
@@ -26,7 +23,7 @@ class Order:
         if sku in self.skus:
             return True
         return False
-    
+
     def commit_quantity(self, sku, quantity):
         self.skus[sku]['quantity_committed'] += quantity
 
@@ -49,7 +46,6 @@ class Order:
 
     def complete_order(self, complete_time):
         """Record the time when order processing is completed."""
-        self.status = 1
         self.order_complete_time = complete_time
 
     def get_quantity_left_for_sku(self, sku):
@@ -65,3 +61,9 @@ class Order:
     def get_processing_time(self):
         """Calculate and return the total processing time from start to completion, if available."""
         return self.order_complete_time - self.process_start_time
+    
+    def __str__(self):
+        return f"Order(order_id={self.order_id}, order_arrival={self.order_arrival}, process_start_time={self.process_start_time}, order_complete_time={self.order_complete_time}, station_id={self.station_id}, skus={self.skus})"
+
+    def __repr__(self):
+        return self.__str__()

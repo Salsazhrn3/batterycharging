@@ -1,3 +1,5 @@
+import csv
+import os
 from typing import Optional, List
 
 import pandas as pd
@@ -5,6 +7,7 @@ import pandas as pd
 from engine.landscape import Landscape
 from engine.universe import Universe
 from engine.util import *
+from .intersection_manager import IntersectionManager
 from .order import Order
 from .order_manager import OrderManager
 from .pod import Pod
@@ -13,9 +16,6 @@ from .robot import Robot
 from .robot_job import RobotJob
 from .station_manager import StationManager
 
-
-import os
-import csv
 
 class Inventory(Universe):
     dimension = 60
@@ -39,7 +39,9 @@ class Inventory(Universe):
         self.station_manager = StationManager()
         self.order_manager = OrderManager()
         self.next_process_tick = 0
-
+        self.intersection_manager = IntersectionManager(self.landscape.current_date_string)
+        self.update_intersection_using_RL = False
+        self.zoning = True
         super().__init__()
 
     def addObject(self, object):
@@ -66,7 +68,8 @@ class Inventory(Universe):
         if int(self._tick) == self.next_process_tick:
             self.find_new_orders()
             self.process_orders()
-            self.next_process_tick += 1
+            if self.update_intersection_using_RL:
+                self.intersection_manager.update_allowed_direction_using_q_model(int(self._tick))
         if len(self.job_queue) > 0:
             current_distance = 1000000
             nearest_robot: Optional[Robot] = None
@@ -83,10 +86,6 @@ class Inventory(Universe):
 
             if nearest_robot is not None:
                 job: RobotJob = self.job_queue.pop(0)
-                # Testing
-                # pod_coordinate = job.pod_coordinate
-                # self.pod_manager.mark_pod_not_available(pod_coordinate)
-                # ===
                 nearest_robot.assign_job_and_set_move_to_take_pod(job)
 
         total_energy = 0
@@ -101,61 +100,88 @@ class Inventory(Universe):
                     self.stop_and_go += 1
 
                 if o.job is not None and o.job.picking_delay == 0 and not o.job.is_finished:
-                    self.finish_orders_in_job(o.job)
+                    need_replenish_pod = self.finish_task_in_job(o.job)
+                    if need_replenish_pod:
+                        print(f"cihuy masuk")
+                        pod: Pod = self.pod_manager.get_pod_by_coordinate(o.job.pod_coordinate.x, o.job.pod_coordinate.y)
+                        station_replenish = self.station_manager.find_available_replenish_station()
+                        new_job = RobotJob(pod.coordinate, station_id=station_replenish.station_id)
+                        new_job.add_replenishment_task(pod)
+                        o.assign_job_and_set_move_to_station(new_job)
+                        
 
                 if o.current_state == 'idle' and o.job is not None:
-                    # station.remove_pod(job.pod_id)
                     self.pod_manager.mark_pod_available(o.job.pod_coordinate)
                     o.job = None
 
         self.total_energy = total_energy
         self.total_turning = total_turning
 
+        if int(self._tick) == self.next_process_tick:
+            self.next_process_tick += 1
+            if self.update_intersection_using_RL:
+                self.intersection_manager.update_model_after_execution(self._tick)
+
         self._tick += self.tick_to_second
 
-   
-
-    def finish_orders_in_job(self, job: RobotJob):
+    def finish_task_in_job(self, job: RobotJob):
+        job_station = self.station_manager.get_station_by_id(job.station_id)
+        if job_station.is_picker_station():
+            return self.finish_picking_task(job)
+        elif job_station.is_replenishment_station():
+            return self.finish_replenishment_task(job)
+    
+    def finish_picking_task(self, job: RobotJob):
+        pod: Pod = self.pod_manager.get_pod_by_coordinate(job.pod_coordinate.x, job.pod_coordinate.y)
+        sku_need_replenished = []
         for order_id, sku, quantity in job.orders:
-            order = self.order_manager.get_order_by_id(order_id)
+            order: Order = self.order_manager.get_order_by_id(order_id)
             order.deliver_quantity(sku, quantity)
-            pod: Pod = self.pod_manager.get_pod_by_id(job.pod_id)
-            pod.pick_sku(sku,quantity)
-            station = self.station_manager.get_station_by_id(order.station_id)
-            orders_in_station: List[Order] = station.get_orders_in_station(self.order_manager)
+            print("order, sku, quantity :" ,order_id, sku, quantity)
 
-            # Assign to csv
+            pod.pick_sku(sku, quantity)
+
+            # Check for SKU Replenishment
+            self.pod_manager.reduce_sku_data(sku, quantity)
+            sku, replenished_status = self.pod_manager.is_sku_need_replenished(sku, 0.8)
+
+            # SKU Replenished Triggered
+            if(replenished_status == True): sku_need_replenished.append(sku)
+
             assign_order_df = pd.read_csv('assign_order.csv')
             assign_order_df.loc[((assign_order_df['order_id'] == order.order_id) & (assign_order_df['item_id'] == sku)), 'status'] = 1
             assign_order_df.to_csv('assign_order.csv', index=False)
-# 
-            if order.is_order_completed():
-                order.complete_order(int(self._tick))
-                self.order_manager.finished_order.append(order.order_id)
-                station = self.station_manager.get_station_by_id(order.station_id)
-                station.remove_order(order_id)
             
-            for station_order in orders_in_station:
-                if station_order.has_sku(sku) and station_order != order:
-                    quantity_to_take_other = station_order.get_quantity_left_for_sku(sku)
-                    pod: Pod = self.pod_manager.get_pod_by_id(job.pod_id)
-                    
-                    if pod.get_quantity(sku) > quantity_to_take_other:
-                        station_order.deliver_quantity(sku, quantity_to_take_other)
-                        pod.pick_sku(sku,quantity_to_take_other)
-                        
-                        if station_order.is_order_completed():
-                            station_order.complete_order(int(self._tick))
-                            self.order_manager.finished_order.append(order.order_id)
-                            station.remove_order(order_id)
+            station = self.station_manager.get_station_by_id(order.station_id)
+            station.reduce_sku_from_station(sku, quantity)
+            
+            if order.is_order_completed():
+                self.order_manager.finish_order(order_id, int(self._tick))
+                station.remove_order(order_id,order)
+                self.insert_finished_order_to_csv(order)
 
-            job.is_finished = True
+        #trigger Check replenishment
+        job.is_finished = True
+        
+        need_replenish_pod = pod.check_replenishment_needed()
+        print(f"reple ga yaaa {need_replenish_pod}")
+        return need_replenish_pod
+    
+    def finish_replenishment_task(self, job: RobotJob):
+        pod: Pod = self.pod_manager.get_pod_by_coordinate(job.pod_coordinate.x, job.pod_coordinate.y)
+        pod.replenish_all_skus()
+        job.is_finished = True
+        return False
 
+    def insert_finished_order_to_csv(self, order: Order):
+        header = ["order_id", "order_arrival", "process_start_time", "order_complete_time", "station_id"]
+        data = [order.order_id, order.order_arrival, order.process_start_time, order.order_complete_time,
+                order.station_id]
+
+        self.write_to_csv("order-finished.csv", header, data)
 
     def find_new_orders(self):
-        orders_df = pd.read_csv('generated_order_new.csv')
-        # Copy the contents of orders_df to assign_order_df
-        # assign_order_df = orders_df.copy()
+        orders_df = pd.read_csv('generated_order.csv')
 
         file_path = 'assign_order.csv'
         if os.path.exists(file_path):
@@ -168,15 +194,18 @@ class Inventory(Universe):
             assign_order_df['status'] = -3
             assign_order_df.to_csv('assign_order.csv', index=False)      
 
+        new_file_df = pd.read_csv(file_path)
+        
         current_second = self.next_process_tick
         previous_second = (self.next_process_tick - 1)
 
         # Filter orders that have arrived by the current second and have not been processed before
-        new_orders = orders_df[(orders_df['order_arrival'] <= current_second) & (orders_df['order_arrival'] > previous_second) & (orders_df['order_arrival'] != 0)]
-        
+        new_orders = new_file_df[(new_file_df['order_arrival']<= current_second) & 
+                               (new_file_df['order_arrival'] > previous_second) &
+                               (new_file_df['status'] == -3)]
+
         grouped_orders = new_orders.groupby('order_id')
-        # print(grouped_orders)
-        
+
         for order_id, group in grouped_orders:
             order_items = group[['item_id', 'item_quantity']].to_dict('records')
             order = Order(order_id=order_id, order_arrival=current_second)
@@ -217,101 +246,98 @@ class Inventory(Universe):
         return result
 
     def process_orders(self):
-        # print("BACKLOG CAK")
-        # print(self.order_manager.get_backlog_skus())
-        # print(self.order_manager.orders)
-        # assign_order_df = pd.read_csv('assign_order.csv')
+        robots_location = []
+        for o in self.get_movable_objects():
+            if len(self.job_queue) > 0:
+                job: RobotJob = self.job_queue[0]
 
-        for order in self.order_manager.orders:
-
-            # Station assignment
+                if o.object_type == "robot" and (o.job is None or o.job.is_finished) and o.current_state == 'idle':
+                    robots_location.append([o.pos_x, o.pos_y])
+        for order in self.order_manager.unfinished_orders:
             assign_order_df = pd.read_csv('assign_order.csv')
-
-
             if order.station_id is None:
-                
-                # available_station = self.station_manager.find_available_picking_station()
+                # available_station = self.station_manager.find_available_picking_station() # This is the baseline 
                 available_station = self.station_manager.find_highest_similarity_station(order.skus, self.pod_manager)
                 if available_station is not None:
                     order.assign_station(available_station.station_id)
-                    available_station.add_order(order.order_id)
-                    # print("Station isss: ", available_station.station_id)               
+                    available_station.add_order(order.order_id, order)
+
                     assign_order_df.loc[assign_order_df['order_id'] == order.order_id, 'assigned_station'] = available_station.station_id
                     assign_order_df.loc[assign_order_df['order_id'] == order.order_id, 'status'] = -1
-                    
                 else:
                     break
-            # else:
-            #     # print("Station: ", order.station_id)
-            #     assign_order_df.loc[assign_order_df['order_id'] == order.order_id, 'assigned_station'] = order.station_id
-
-            if order.process_start_time >= 0:
-                continue
-
-            # print(assign_order_df)
-            assign_order_df.to_csv('assign_order.csv', index=False)
-
-            order.start_processing(int(self._tick))
-
-
-            # Pod assignment
-         
-            order_station = self.station_manager.get_station_by_id(order.station_id)
-            skus_in_station = order_station.get_skus_in_station(self.order_manager)
-            
-            skus_in_order = order.get_remaining_skus()
-            station_coordinate = order_station.coordinate
-            # print("Station coordinate", station_coordinate)
-            # print(station_coordinate)
-
-            orders_in_station = order_station.get_orders_in_station(self.order_manager)
-            for sku in order.get_remaining_skus():
-
-                # Similarity check (Similarity is counted where the sku in pod is sufficient)
-                available_pod: Pod = self.pod_manager.get_available_pod_similarity(sku, skus_in_station, station_coordinate)
-                # print("sku di station: ", skus_in_station)
-               
                 
-                # Default
-                # available_pod: Pod = self.pod_manager.get_available_pod(sku)
+            if order.process_start_time <= 0:
+                order.start_processing(int(self._tick))
+
+            assign_order_df.to_csv('assign_order.csv', index=False)
+            
+            # Get the station assigned to this order and orders in that station
+            order_station = self.station_manager.get_station_by_id(order.station_id)
+            orders_in_station = order_station.get_orders_in_station()
+
+            # For Emily {A:10, B:5, C:12}
+            skus_in_station = order_station.get_skus_in_station()
+            # For Jhen {A:[5,5], B:[5], C:[3,4,5]}
+            skus_in_station_dict = order_station.get_skus_in_station_dict()
+            station_coordinate = order_station.coordinate
+            for sku in order.get_remaining_skus():
+                # This is the baseline
+                # available_pod: Pod = self.pod_manager.get_available_pod(sku) 
+                
+                # This is Emily's pod picking
+                available_pod: Pod = self.pod_manager.get_available_pod_similarity(sku, skus_in_station, station_coordinate, robots_location) 
+                # This is Jhen's pod picking
+                # available_pod: Pod = self.pod_manager.get_available_pod_inventory(sku, skus_in_station_dict, station_coordinate, robots_location) 
                 if available_pod is None:
                     continue
                 quantity_to_take = order.get_quantity_left_for_sku(sku)
-                # Ini harusnya commit utk semua sku yang ada di station se, ye kan ye kan
-                # Jadi for order in station
-                # Order commit sku gituh
-
                 order.commit_quantity(sku, quantity_to_take)
 
-                for order_ in orders_in_station:
-                    if order_ != order:
-                        if order_.has_sku(sku):
-                            quantity_to_take_other = order.get_quantity_left_for_sku(sku)
-                            if available_pod.get_quantity(sku) > quantity_to_take_other:
-                                order_.commit_quantity(sku, quantity_to_take_other)
+                # Commiting every order that has the sku in the pod chosen
+                available_pod.pick_sku(sku, quantity_to_take)
                 
+                 # Append pod to station
                 order_station.add_pod(available_pod.pod_id)
+                available_pod.station = order_station
 
-                # print("pod: ", available_pod.pod_id)
-                # print("sku: ", sku)
-                # print("order id: ", order.order_id)
-                
                 assign_order_df.loc[((assign_order_df['order_id'] == order.order_id) & (assign_order_df['item_id'] == sku)), 'assigned_pod'] = int(available_pod.pod_id)
                 
                 assign_order_df.loc[((assign_order_df['order_id'] == order.order_id) & (assign_order_df['item_id'] == sku)), 'status'] = 0
 
                 assign_order_df.to_csv('assign_order.csv', index=False)
-                
-                available_pod.station = order_station
-                
-                job = RobotJob(available_pod.pod_id
-                               ,available_pod.coordinate, station_coordinate=order_station.coordinate,
-                               station_path=order_station.path)
-                order.assign_pod()
+
+                job = RobotJob(available_pod.coordinate, station_id=order.station_id)
                 self.pod_manager.mark_pod_not_available(available_pod.coordinate)
-                job.add_picking_task(order.order_id, sku, quantity_to_take)
+
+                job.add_picking_task(order.order_id, sku, quantity_to_take) # Simple kan disini ya beb
+                pod_skus = [i for i in available_pod.skus]
+                
+                # Turn this off for baseline 
+                for skus_pod in pod_skus:
+                    for order_ in orders_in_station:
+                        if order_ != order and order_.has_sku(skus_pod):
+                                quantity_to_take_other = order_.get_quantity_left_for_sku(skus_pod)
+                                if available_pod.get_quantity(skus_pod) > quantity_to_take_other and quantity_to_take_other > 0:
+                                    order_.commit_quantity(skus_pod, quantity_to_take_other)
+                                    available_pod.pick_sku(sku, quantity_to_take_other)
+                                    job.add_picking_task(order_.order_id, skus_pod,quantity_to_take_other)
+               
                 self.job_queue.append(job)
-        print("Finished Order")
-        print(self.order_manager.finished_order)    
-        
-        # assign_order_df.to_csv('assign_order.csv', index=False)
+               
+
+    def write_to_csv(self, filename, header, data):
+        folder_path = os.path.join("result", self.landscape.current_date_string)
+
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        filename = os.path.join(folder_path, filename)
+        file_exists = os.path.exists(filename)
+
+        with open(filename, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            if not file_exists:
+                writer.writerow(header)
+
+            writer.writerow(data)
