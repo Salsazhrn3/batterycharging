@@ -1,6 +1,25 @@
 import csv
 import random
+from layout import Layout
+from charging_layout_generator import ChargingLayoutGenerator
 
+# 1. Inisialisasi layout bawaan
+base_layout = Layout()
+base_layout.generate() # Ini akan membuat matrix dasar
+
+# 2. Masukkan ke generator (Contoh: Pipeline 4 - Perimeter)
+generator = ChargingLayoutGenerator(base_layout.data_matrix, {
+    "pipeline": 4, 
+    "num_chargers": 10
+})
+new_matrix = generator.generate()
+
+# 3. Timpa ke file CSV yang biasa dibaca oleh NetLogo
+with open('generated_pod.csv', 'w', newline='') as csvfile:
+    writer = csv.writer(csvfile)
+    writer.writerows(new_matrix)
+    
+print("Layout CSV berhasil di-update dengan charger!")
 
 class Layout(object):
     def __init__(self):

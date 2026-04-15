@@ -64,15 +64,19 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ── cell-value constants ──────────────────────────────────────────────────────
-NAVIGABLE: int = 0
 POD: int = 1
 CHARGER: int = 2
-PICKING: int = 3
-REPLENISHMENT: int = 4
 
-# Cell values that a robot can drive through during BFS traversal.
-# Override at module level if your grid encodes additional passable tiles.
-TRAVERSABLE: FrozenSet[int] = frozenset({NAVIGABLE})
+# Di sistem Rika, Picking station = 11, Replenishment = 21
+PICKING_STATIONS: FrozenSet[int] = frozenset({11, 21})
+
+# Di sistem Rika, jalanan/rel Kiva punya banyak angka (3-7, 12-29, 99)
+TRAVERSABLE: FrozenSet[int] = frozenset({
+    3, 4, 5, 6, 7,                # Aisle & intersections
+    12, 13, 14, 16, 17, 18, 19,   # Rails & corners (kiri/picking)
+    22, 23, 24, 26, 27, 28, 29,   # Rails & corners (kanan/replenishment)
+    99                            # Blank space / safe zone
+})
 
 # ── type aliases ──────────────────────────────────────────────────────────────
 Cell = Tuple[int, int]
@@ -651,13 +655,15 @@ class ChargingLayoutGenerator:
 
         for r in range(rows):
             for c in range(cols):
-                if matrix[r][c] == PICKING:
+                # Cek apakah sel ini adalah stasiun (11 atau 21)
+                if matrix[r][c] in PICKING_STATIONS:
                     for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                         nr, nc = r + dr, c + dc
                         if (
                             0 <= nr < rows
                             and 0 <= nc < cols
-                            and matrix[nr][nc] == NAVIGABLE
+                            # Cek apakah sel sebelahnya adalah jalanan yang bisa dilewati
+                            and matrix[nr][nc] in TRAVERSABLE
                         ):
                             queue_cells.add((nr, nc))
 
@@ -734,11 +740,23 @@ class ChargingLayoutGenerator:
 
         for row_idx in (0, rows - 1):
             for c in range(cols):
-                if matrix[row_idx][c] == NAVIGABLE:
+                if matrix[row_idx][c] in TRAVERSABLE:
                     perimeter.append((row_idx, c))
 
         return perimeter
+    # ═════════════════════════════════════════════════════════════════════════
+    #  Private helpers
+    # ═════════════════════════════════════════════════════════════════════════
 
+    def _navigable_cells(self, matrix: Matrix) -> Set[Cell]:
+        """Return the set of all (row, col) cells that Kiva can drive on."""
+        return {
+            (int(r), int(c))
+            for r in range(matrix.shape[0])
+            for c in range(matrix.shape[1])
+            if matrix[r][c] in TRAVERSABLE
+        }
+    
     def apply_perimeter_layout(
         self, matrix: Matrix, num_chargers: int
     ) -> Matrix:
