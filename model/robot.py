@@ -57,7 +57,7 @@ class Robot(Object):
     _robot_radius = _robot_width / 2
     _length = 0.75 # m
     _lift_coef = 0.2
-    
+
     e_accel = 0
     e_decel = 0
     e_const = 0
@@ -66,6 +66,25 @@ class Robot(Object):
     e_frot = 0
     e_lift = 0
     e_lu = 0
+
+    # ── Battery parameters — derived from real AGV spec (Table 5) ──────────
+    #
+    # AGV Battery           : 1.8 kWh  →  126.76 Ah
+    #   Inferred voltage    : 1800 Wh / 126.76 Ah ≈ 14.2 V
+    #   Capacity in Joules  : 1.8 kWh × 3 600 000 J/kWh = 6 480 000 J
+    #
+    # Power Consumption Rate: 5 %/hour →  0.0014 %/sec
+    #   This is the *total* operational drain including electronics, sensors,
+    #   and communication — applied every tick even when the robot is idle.
+    #   Per second : 0.05/3600 × 6 480 000 = 90 J/s
+    #
+    # Charging Rate         : 28 A/min →  0.47 A/sec
+    #   Power at 14.2 V     : 28 A × 14.2 V = 397.6 W
+    #
+    BATTERY_CAPACITY_J: float = 6_480_000.0     # 1.8 kWh
+    BATTERY_VOLTAGE_V: float = 14.2             # inferred from 1800 Wh / 126.76 Ah
+    BASE_DRAIN_RATE_PER_S: float = 90.0         # 5 %/hour of capacity → 90 J/s
+    CHARGE_POWER_W: float = 397.6               # 28 A × 14.2 V
     
     
     
@@ -86,8 +105,13 @@ class Robot(Object):
         self.current_intersection_start_time = None
         self.current_intersection_finish_time = None
         self.warehouse = universe
-        self.return_fix = False 
-        self.return_nearest = True 
+        self.return_fix = False
+        self.return_nearest = True
+
+        # Battery state — starts fully charged.
+        self.battery_level_j: float = self.BATTERY_CAPACITY_J
+        # Set to True on any tick the robot is physically over a charger cell.
+        self.is_charging: bool = False 
         # self.zone_boundary =[]
         # self.zone: Optional[Zone] = None
         super().__init__()
@@ -111,21 +135,69 @@ class Robot(Object):
         return None
 
     def calculateEnergy(self, velocity, acceleration):
+        """Zakka et al. (2025) motion-energy model — returns Joules for one tick.
+
+        Covers three regimes:
+          * Acceleration  (a > 0): inertia + friction forces acting together.
+          * Deceleration  (a < 0): inertia − friction (net braking force).
+          * Constant speed (a = 0, v ≠ 0): rolling friction only.
+        """
         tick_unit = self.universe.tick_to_second
-       
+
         if acceleration > 0 and velocity != 0:
-            # average_speed = 2 * velocity + (acceleration * tick_unit)
-            e_accel = (self.mass + self.load_mass) * (acceleration * self._impact_resistance + self._gravity * self._friction) * velocity * tick_unit
+            e_accel = (self.mass + self.load_mass) * (
+                acceleration * self._impact_resistance
+                + self._gravity * self._friction
+            ) * velocity * tick_unit
             return e_accel
+
         elif acceleration < 0 and velocity != 0:
-            # average_speed = 2 * velocity + (acceleration * tick_unit)
-            e_decel = abs((self.mass + self.load_mass) * (acceleration * self._impact_resistance - self._gravity * self._friction) * velocity * tick_unit)
+            e_decel = abs(
+                (self.mass + self.load_mass) * (
+                    acceleration * self._impact_resistance
+                    - self._gravity * self._friction
+                ) * velocity * tick_unit
+            )
             return e_decel
+
         elif velocity != 0:
-            e_const = (self.mass + self.load_mass) * self._gravity * self._friction * velocity * tick_unit
+            e_const = (
+                (self.mass + self.load_mass)
+                * self._gravity * self._friction
+                * velocity * tick_unit
+            )
             return e_const
-       
-        return 0
+
+        return 0.0
+
+    # ── Battery helpers ──────────────────────────────────────────────────────
+
+    @property
+    def battery_pct(self) -> float:
+        """Battery level as a percentage of full capacity (0.0 – 100.0)."""
+        return (self.battery_level_j / self.BATTERY_CAPACITY_J) * 100.0
+
+    def _apply_drive_by_charging(self) -> None:
+        """Add charge when the robot's snapped grid position is a charger cell.
+
+        The universe stores the set of charger coordinates in
+        ``universe.charger_cells`` (populated by netlogo.py at setup time from
+        cells with value 2 in generated_pod.csv).  If a robot is precisely on
+        one of those cells this tick it receives energy based on CHARGE_POWER_W
+        scaled by tick_to_second, capped at full battery.
+        """
+        charger_cells: set = getattr(self.universe, 'charger_cells', set())
+        grid_pos = (round(self.pos_x), round(self.pos_y))
+
+        if grid_pos in charger_cells:
+            charge_j = self.CHARGE_POWER_W * self.universe.tick_to_second
+            self.battery_level_j = min(
+                self.BATTERY_CAPACITY_J,
+                self.battery_level_j + charge_j,
+            )
+            self.is_charging = True
+        else:
+            self.is_charging = False
 
     def setPath(self, path):
         current_heading = self.heading
@@ -147,21 +219,27 @@ class Robot(Object):
         self.route_stop_points = route_stop_points
 
     def changeColorByState(self):
-        if self.current_state == "taking_pod": # occupied 
-            self.color = 57  # green
+        if self.current_state == "taking_pod":       # heading to pod
+            self.color = 57   # green
         elif self.current_state == "delivering_pod":
             station: Station = self.universe.station_manager.get_station_by_id(self.job.station_id)
             if station.is_replenishment_station():
                 self.color = 138
             else:
-                self.color = 15  # red # have pod and go to picking station 
+                self.color = 15  # red — carrying pod to picking station
         elif self.current_state == "returning_pod":
-            self.color = 46  # yellow
-        elif self.current_state == "station_processing": #inclue queue
-            self.color = 94  # blue
+            self.color = 46   # yellow
+        elif self.current_state == "station_processing":
+            self.color = 94   # blue
         elif self.current_state == "idle":
             self.total_idle += 1
-            self.color = 0  # black
+            self.color = 0    # black
+
+        # Override with cyan when the robot is actively receiving drive-by charge.
+        # is_charging was set during the *previous* tick's drawNextPosition call,
+        # giving a 1-tick lag that is imperceptible at normal simulation speeds.
+        if self.is_charging:
+            self.color = 85   # cyan — charging
 
     def advance_state(self):
         # print(f"current_state: {self.current_state}")
@@ -172,6 +250,7 @@ class Robot(Object):
                 self.load_mass = pod.mass
             e_li = self.load_mass * self._gravity * self._lift_coef
             self.energy_consumption += e_li
+            self.battery_level_j = max(0.0, self.battery_level_j - e_li)
             self.current_state = "delivering_pod"
             upsert_pod_travel(
                 self.job.my_id,
@@ -201,6 +280,7 @@ class Robot(Object):
             upsert_pod_location(self.job.pod.pod_id, self.job.pod.pos_x, self.job.pod.pos_y)
             e_li = self.load_mass * self._gravity * self._lift_coef
             self.energy_consumption += e_li
+            self.battery_level_j = max(0.0, self.battery_level_j - e_li)
             self.load_mass = 0
             self.taking_pod_delay += self.delay_per_task
             self.current_state = "idle"
@@ -662,6 +742,7 @@ class Robot(Object):
         e_frot = (self.mass + self.load_mass) * self._gravity * self._friction * self._robot_radius * rotation
         e_rot = e_krot + e_frot
         self.energy_consumption += e_rot
+        self.battery_level_j = max(0.0, self.battery_level_j - e_rot)
         self.turning += 1
         self.route_stop_points.pop(0)
 
@@ -810,9 +891,15 @@ class Robot(Object):
         initial_velocity = self.velocity
         initial_acceleration = self.acceleration
 
+        # ── 1. Compute motion energy for this tick (Zakka et al. model) ──────
         energy = self.calculateEnergy(initial_velocity, initial_acceleration)
         self.energy_consumption += energy
 
+        # ── 2. Drain the battery by motion energy + base operational drain ────
+        base_drain = self.BASE_DRAIN_RATE_PER_S * self.universe.tick_to_second
+        self.battery_level_j = max(0.0, self.battery_level_j - energy - base_drain)
+
+        # ── 3. Advance physical position ──────────────────────────────────────
         if self.velocity != 0:
             distance_delta = self.velocity * self.universe.tick_to_second
             if self.heading == 0:
@@ -824,6 +911,9 @@ class Robot(Object):
             elif self.heading == 270:
                 self.pos_x -= distance_delta
         self.coordinate = NetLogoCoordinate(round(self.pos_x), round(self.pos_y))
+
+        # ── 4. Drive-by charging: replenish battery if on a charger cell ──────
+        self._apply_drive_by_charging()
 
         if self.acceleration != 0:
             self.velocity += (self.acceleration * self.universe.tick_to_second)

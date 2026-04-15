@@ -25,7 +25,7 @@ def initialize_pre_assign_table(timestamp: str, db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("✅ pre_assign table initialized.")
+    print("pre_assign table initialized.")
 
 def clear_pre_assign_table(db_path="warehouse.db"):
     """
@@ -37,7 +37,7 @@ def clear_pre_assign_table(db_path="warehouse.db"):
     cursor.execute(f"DELETE FROM pre_assign_{TS}")
     conn.commit()
     conn.close()
-    print("🧹 All pre_assign records have been cleared.")
+    print("All pre_assign records have been cleared.")
 
 def insert_pre_assign(
         time: float,
@@ -61,4 +61,4 @@ def insert_pre_assign(
 
     conn.commit()
     conn.close()
-    print(f"📌 Inserted pre_assign record: current={current}, order_id={order}, score={score}")
+    print(f" Inserted pre_assign record: current={current}, order_id={order}, score={score}")

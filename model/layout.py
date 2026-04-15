@@ -1,25 +1,5 @@
 import csv
 import random
-from layout import Layout
-from charging_layout_generator import ChargingLayoutGenerator
-
-# 1. Inisialisasi layout bawaan
-base_layout = Layout()
-base_layout.generate() # Ini akan membuat matrix dasar
-
-# 2. Masukkan ke generator (Contoh: Pipeline 4 - Perimeter)
-generator = ChargingLayoutGenerator(base_layout.data_matrix, {
-    "pipeline": 4, 
-    "num_chargers": 10
-})
-new_matrix = generator.generate()
-
-# 3. Timpa ke file CSV yang biasa dibaca oleh NetLogo
-with open('generated_pod.csv', 'w', newline='') as csvfile:
-    writer = csv.writer(csvfile)
-    writer.writerows(new_matrix)
-    
-print("Layout CSV berhasil di-update dengan charger!")
 
 class Layout(object):
     def __init__(self):
@@ -75,6 +55,12 @@ class Layout(object):
             self.horizontal_direction_switch = not self.horizontal_direction_switch
 
         self.adjust_pod_availability(data_matrix)
+        from model.charging_layout_generator import ChargingLayoutGenerator
+        generator = ChargingLayoutGenerator(data_matrix, {
+            "pipeline": 4, 
+            "num_chargers": 10
+        })
+        data_matrix = generator.generate()
 
         with open('generated_pod.csv', 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
@@ -188,27 +174,19 @@ class Layout(object):
         return blank_space
 
     def adjust_pod_availability(self, matrix):
-        # Count the current total number of active pods
+        # Hitung total pod saat ini
         current_total_pods = sum(row.count(1) for row in matrix)
 
-        # Calculate how many pods need to be deactivated and converted
+        # Hitung berapa pod yang harus dinonaktifkan agar sesuai target (420)
         if current_total_pods > self.total_pods_active:
-            pods_to_deactivate = current_total_pods - (self.total_pods_active + self.total_charging_stations)
-            pods_to_convert = self.total_charging_stations
+            pods_to_deactivate = current_total_pods - self.total_pods_active
         else:
             pods_to_deactivate = 0
-            pods_to_convert = 0
 
-        # List of all pod positions in matrix that are currently active
+        # Daftar semua posisi pod (angka 1)
         pod_positions = [(r, c) for r in range(len(matrix)) for c in range(len(matrix[r])) if matrix[r][c] == 1]
 
-        # Randomly select and deactivate pods if there are any to deactivate
+        # Hapus pod secara acak agar gudang tidak full block
         if pods_to_deactivate > 0:
             for r, c in random.sample(pod_positions, pods_to_deactivate):
-                matrix[r][c] = 0  # Mark this position as deactivated
-                pod_positions.remove((r, c))  # Remove this position from available pods
-
-        # Randomly select and convert remaining active pods to charging stations if needed
-        if pods_to_convert > 0:
-            for r, c in random.sample(pod_positions, pods_to_convert):
-                matrix[r][c] = 2  # Mark this position as a charging station
+                matrix[r][c] = 0  # 0 menandakan area pod kosong (deactivated)

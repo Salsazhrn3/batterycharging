@@ -71,6 +71,10 @@ class Inventory(Universe):
         self.last_order = {}
         
         self.preassign_per_station = defaultdict(deque)
+
+        # Set of (x, y) grid coordinates that are charging stations (cell value 2).
+        # Populated by draw_storage_from_generated_file() in netlogo.py during setup.
+        self.charger_cells: set = set()
         # self.currently_picking = {}
         # # Shared wrapper for the DataFrame
         # self.shared_data = {"df": pd.DataFrame()}

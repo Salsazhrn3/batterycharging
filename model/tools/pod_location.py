@@ -13,7 +13,7 @@ def clear_pod_locations(db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("🧹 All pod locations have been cleared.")
+    print("All pod locations have been cleared.")
 
 def initialize_pod_location_table(timestamp: str, db_path="warehouse.db"):
     global TS
@@ -32,7 +32,7 @@ def initialize_pod_location_table(timestamp: str, db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("✅ pod_location table initialized.")
+    print("pod_location table initialized.")
 
 def upsert_pod_location(pod_id: str, x: int, y: int, db_path="warehouse.db"):
     """
@@ -49,7 +49,7 @@ def upsert_pod_location(pod_id: str, x: int, y: int, db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print(f"✅ Pod {pod_id} location set to ({x}, {y}).")
+    print(f"Pod {pod_id} location set to ({x}, {y}).")
 
 def get_pod_location(pod_id: str, db_path="warehouse.db"):
     """
@@ -65,10 +65,10 @@ def get_pod_location(pod_id: str, db_path="warehouse.db"):
     conn.close()
 
     if result:
-        print(f"📍 Pod {pod_id} is at location {result}")
+        print(f" Pod {pod_id} is at location {result}")
         return result
     else:
-        print(f"❌ Pod {pod_id} not found.")
+        print(f" Pod {pod_id} not found.")
         return None
 
 # Example usage

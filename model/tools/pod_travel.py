@@ -28,7 +28,7 @@ def initialize_pod_travel_table(timestamp: str, db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("✅ pod_travel table initialized.")
+    print("pod_travel table initialized.")
 
 def clear_pod_travel(db_path="warehouse.db"):
     """
@@ -41,7 +41,7 @@ def clear_pod_travel(db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("🧹 All pod travel records have been cleared.")
+    print("All pod travel records have been cleared.")
 
 def upsert_pod_travel(
         job_id: str,
@@ -93,9 +93,9 @@ def upsert_pod_travel(
             """
             params.extend([job_id, robot_id, pod_id, task])
             cursor.execute(query, tuple(params))
-            print(f"♻️ Updated pod travel for pod {pod_id} (job {job_id}, robot {robot_id}, task {task}).")
+            print(f"Updated pod travel for pod {pod_id} (job {job_id}, robot {robot_id}, task {task}).")
         else:
-            print("⚠️ No fields to update.")
+            print("No fields to update.")
 
     else:
         # Insert new
@@ -107,7 +107,7 @@ def upsert_pod_travel(
             job_id, robot_id, pod_id, task,
             from_position, to_position, start_time, finish_time
         ))
-        print(f"➕ Inserted new pod travel record for pod {pod_id} (job {job_id}, robot {robot_id}, task {task}).")
+        print(f" Inserted new pod travel record for pod {pod_id} (job {job_id}, robot {robot_id}, task {task}).")
 
     conn.commit()
     conn.close()

@@ -20,7 +20,7 @@ def initialize_pod_info_table(timestamp: str, db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("✅ pod_info table initialized.")
+    print("pod_info table initialized.")
 
 def clear_pod_info(db_path="warehouse.db"):
     conn = sqlite3.connect(db_path)
@@ -30,7 +30,7 @@ def clear_pod_info(db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("🧹 All pod info rows have been cleared.")
+    print("All pod info rows have been cleared.")
 
 def upsert_pod_location(pod_id: str, x: float, y: float, db_path="warehouse.db"):
     conn = sqlite3.connect(db_path)
@@ -44,7 +44,7 @@ def upsert_pod_location(pod_id: str, x: float, y: float, db_path="warehouse.db")
 
     conn.commit()
     conn.close()
-    print(f"✅ Pod {pod_id} location set to ({x}, {y}).")
+    print(f" Pod {pod_id} location set to ({x}, {y}).")
 
 def upsert_pod_idle(pod_id: str, is_idle: bool, db_path="warehouse.db"):
     conn = sqlite3.connect(db_path)
@@ -58,7 +58,7 @@ def upsert_pod_idle(pod_id: str, is_idle: bool, db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print(f"✅ Pod {pod_id} idle status set to {is_idle}.")
+    print(f"Pod {pod_id} idle status set to {is_idle}.")
 
 def get_pod_info(pod_id: str, db_path="warehouse.db"):
     conn = sqlite3.connect(db_path)
@@ -69,10 +69,10 @@ def get_pod_info(pod_id: str, db_path="warehouse.db"):
     conn.close()
 
     if result:
-        print(f"📍 Pod {pod_id} info: location=({result[0]}, {result[1]}), is_idle={bool(result[2])}")
+        print(f" Pod {pod_id} info: location=({result[0]}, {result[1]}), is_idle={bool(result[2])}")
         return result
     else:
-        print(f"❌ Pod {pod_id} not found.")
+        print(f" Pod {pod_id} not found.")
         return None
 
 def get_pod_location(pod_id: str, db_path="warehouse.db"):
@@ -84,10 +84,10 @@ def get_pod_location(pod_id: str, db_path="warehouse.db"):
     conn.close()
 
     if result:
-        print(f"📍 Pod {pod_id} is at location ({result[0]}, {result[1]})")
+        print(f" Pod {pod_id} is at location ({result[0]}, {result[1]})")
         return result
     else:
-        print(f"❌ Pod {pod_id} not found.")
+        print(f" Pod {pod_id} not found.")
         return None
 
 def get_pod_idle(pod_id: str, db_path="warehouse.db"):
@@ -99,8 +99,8 @@ def get_pod_idle(pod_id: str, db_path="warehouse.db"):
     conn.close()
 
     if result is not None:
-        print(f"🟢 Pod {pod_id} is_idle = {bool(result[0])}")
+        print(f" Pod {pod_id} is_idle = {bool(result[0])}")
         return bool(result[0])
     else:
-        print(f"❌ Pod {pod_id} not found.")
+        print(f" Pod {pod_id} not found.")
         return None

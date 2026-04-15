@@ -720,28 +720,44 @@ class ChargingLayoutGenerator:
 
     def find_perimeter_cells(self, matrix: Matrix) -> List[Cell]:
         """
-        Collect navigable cells on the outermost top and bottom rows.
-
-        Strictly row 0 and row (R − 1) are scanned, consistent with the
-        "perimeter wall" placement concept where chargers are placed near
-        replenishment infrastructure at the warehouse edges.
-
-        Parameters
-        ----------
-        matrix : Matrix
-
-        Returns
-        -------
-        List of (row, col) navigable perimeter cells in row-major order
-        (top row first, then bottom row).
+        Mencari aisle vertikal (garis hijau) tepat sebelum Replenishment Station,
+        dan MENGHINDARI pintu masuk stasiun agar robot tidak terhalang.
         """
         rows, cols = matrix.shape
         perimeter: List[Cell] = []
 
-        for row_idx in (0, rows - 1):
+        # 1. Cari batas paling KIRI dari stasiun Replenishment (angka 21 - 29)
+        min_station_col = cols
+        for r in range(rows):
             for c in range(cols):
-                if matrix[row_idx][c] in TRAVERSABLE:
-                    perimeter.append((row_idx, c))
+                if 21 <= matrix[r][c] <= 29:
+                    if c < min_station_col:
+                        min_station_col = c
+
+        # 2. Garis hijau berada tepat 1 atau 2 kolom di sebelah kiri stasiun tersebut
+        target_col = min_station_col - 1
+
+        if target_col <= 0 or target_col >= cols:
+            target_col = cols - 2 # Fallback aman jika stasiun tidak ditemukan
+
+        # 3. Kumpulkan titik yang aman untuk diletakkan charger
+        for r in range(rows):
+            if matrix[r][target_col] in TRAVERSABLE:
+                # -- ATURAN ANTI-BLOKIR (DO NOT BLOCK ENTRANCE) --
+                # Kita cek area di sebelah kanan titik ini. 
+                # Jika ada struktur stasiun (21-29) atau persimpangan (3) di baris yang sama,
+                # berarti titik ini persis berada di depan pintu masuk. KITA LEWATI!
+                is_blocking = False
+                for c in range(target_col + 1, cols):
+                    val = matrix[r][c]
+                    if (21 <= val <= 29) or val == 3:
+                        is_blocking = True
+                        break
+                
+                # Jika baris ini aman (tidak sejajar dengan pintu stasiun), 
+                # tambahkan sebagai kandidat lokasi charger
+                if not is_blocking:
+                    perimeter.append((r, target_col))
 
         return perimeter
     # ═════════════════════════════════════════════════════════════════════════

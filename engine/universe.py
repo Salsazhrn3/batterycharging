@@ -28,21 +28,21 @@ class Universe:
         return self._objects
     
     def generateResult(self):
-        # print("\n\ngenerateResult is called\n\n")
-        # print("moveable objects")
-        # print(len(self.get_movable_objects()))
         result = []
         for o in self.get_movable_objects():
-            result.append({
-                'id': o.id,
-                'heading': o.heading,
-                'shape': o.shape,
-                'velocity': o.velocity,
-                'acceleration': o.acceleration,
-                'pos_x': o.pos_x,
-                'pos_y': o.pos_y,
-                'color': o.color,
-            })
+            entry = {
+                'id': o.id,                      # Index 0 di NetLogo
+                'heading': o.heading,            # Index 1
+                'shape': o.shape,                # Index 2
+                'velocity': o.velocity,          # Index 3
+                'acceleration': o.acceleration,  # Index 4
+                'pos_x': o.pos_x,                # Index 5
+                'pos_y': o.pos_y,                # Index 6
+                'color': o.color,                # Index 7
+                # Index 8 di NetLogo (Selalu dikirim, kalau bukan robot, anggap 100)
+                'battery_pct': getattr(o, 'battery_pct', 100.0) 
+            }
+            result.append(entry)
 
         return result
 

@@ -28,7 +28,7 @@ def initialize_job_task_table(timestamp: str, db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("✅ job_task table initialized.")
+    print("job_task table initialized.")
 
 def clear_job_task_table(db_path="warehouse.db"):
     """
@@ -41,7 +41,7 @@ def clear_job_task_table(db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("🧹 All job tasks have been cleared.")
+    print("All job tasks have been cleared.")
 
 def upsert_job_task(
         pod_id: int,
@@ -101,7 +101,7 @@ def upsert_job_task(
 
     conn.commit()
     conn.close()
-    print(f"📦 Job task ({pod_id}, {order_id}, {sku}, {qty}) upserted.")
+    print(f" Job task ({pod_id}, {order_id}, {sku}, {qty}) upserted.")
 
 def update_job_task(
         pod_id: int,
@@ -147,7 +147,7 @@ def update_job_task(
     
     conn.commit()
     conn.close()
-    print(f"📦 Job task ({pod_id}, {order_id}, {sku}, {qty}) updated.")
+    print(f" Job task ({pod_id}, {order_id}, {sku}, {qty}) updated.")
 
 def get_job_task(pod_id: int = None, order_id: str = None, db_path: str = "warehouse.db"):
     """

@@ -515,6 +515,8 @@ def draw_storage_from_generated_file(universe: Inventory):
                     universe.pod_manager.add_pod(obj)
                 elif value == 2:
                     obj.shape = 'square 2'
+                    # Register this grid cell so robots can detect drive-by charging.
+                    universe.charger_cells.add((x, y))
 
                 if obj_left_value != 1:
                     graph_pod.add_edge(obj_key, obj_left_coordinate, weight=100)

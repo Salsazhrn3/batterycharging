@@ -13,7 +13,7 @@ def clear_order_history(db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("🧹 All orders have been cleared.")
+    print("All orders have been cleared.")
 
 def initialize_order_history_table(timestamp: str, db_path="warehouse.db"):
     global TS
@@ -34,7 +34,7 @@ def initialize_order_history_table(timestamp: str, db_path="warehouse.db"):
 
     conn.commit()
     conn.close()
-    print("✅ order_history table initialized.")
+    print("order_history table initialized.")
 
 def upsert_order_history(
         order_id: str, 
@@ -85,7 +85,7 @@ def upsert_order_history(
 
     conn.commit()
     conn.close()
-    print(f"📦 Order {order_id} upserted.")
+    print(f" Order {order_id} upserted.")
 
 def get_order_history(order_id: str = None, db_path: str = "warehouse.db"):
     """

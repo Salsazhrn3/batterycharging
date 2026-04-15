@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(python -c ':*)",
-      "Bash(grep -r \"if __name__\" /c/TA/netlogo_SA_8_new/*.py)"
+      "Bash(grep -r \"if __name__\" /c/TA/netlogo_SA_8_new/*.py)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('model/robot.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")"
     ]
   }
 }
