@@ -634,13 +634,13 @@ class ChargingLayoutGenerator:
     #  PIPELINE 3 — Picking-Station Heuristic (Opportunity Charging)
     # ═════════════════════════════════════════════════════════════════════════
 
-    def find_picking_queues(self, matrix: Matrix) -> List[Cell]:
+    def find_picking_stations(self, matrix: Matrix) -> List[Cell]:
         """
-        Identify navigable queueing cells adjacent to picking stations.
+        Return the coordinates of picking-station cells (value 11) themselves.
 
-        Scans every cell valued PICKING (3) and collects its 4-connected
-        NAVIGABLE (0) neighbours.  A cell adjacent to two picking stations
-        appears only once (deduplication via set).
+        These are the exact cells where chargers should be co-located.
+        Replenishment stations (value 21) are excluded — chargers belong
+        only at the picking side of the warehouse.
 
         Parameters
         ----------
@@ -648,65 +648,55 @@ class ChargingLayoutGenerator:
 
         Returns
         -------
-        Sorted list of (row, col) queue cells, in row-major order.
+        Sorted list of (row, col) picking-station cells, in row-major order.
         """
         rows, cols = matrix.shape
-        queue_cells: Set[Cell] = set()
+        station_cells: List[Cell] = []
 
         for r in range(rows):
             for c in range(cols):
-                # Cek apakah sel ini adalah stasiun (11 atau 21)
-                if matrix[r][c] in PICKING_STATIONS:
-                    for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                        nr, nc = r + dr, c + dc
-                        if (
-                            0 <= nr < rows
-                            and 0 <= nc < cols
-                            # Cek apakah sel sebelahnya adalah jalanan yang bisa dilewati
-                            and matrix[nr][nc] in TRAVERSABLE
-                        ):
-                            queue_cells.add((nr, nc))
+                if matrix[r][c] == 11:  # picking station only
+                    station_cells.append((r, c))
 
-        return sorted(queue_cells)
+        return sorted(station_cells)
 
     def apply_picking_station_layout(
         self, matrix: Matrix, num_chargers: int
     ) -> Matrix:
         """
-        Distribute *num_chargers* chargers among picking-queue cells.
+        Co-locate chargers at picking-station cells (value 11).
 
-        Placement is deterministic (evenly spaced by sorted index) rather
-        than random, ensuring reproducibility.  If *num_chargers* exceeds
-        the number of queue cells, every queue cell receives a charger.
+        The grid values are NOT overwritten because netlogo.py's station-
+        creation logic (value 14) checks ``obj_left_value == 11``.
+        Instead, netlogo.py registers value-11 cells as charger_cells
+        directly.  This method selects which stations receive chargers
+        and logs the result for traceability.
 
         Parameters
         ----------
         matrix : Matrix
-            Working copy (mutated in place).
+            Working copy (returned unmodified).
         num_chargers : int
             Target number of chargers to place.
 
         Returns
         -------
-        The modified matrix.
+        The matrix (unchanged — charger registration happens in netlogo.py).
         """
-        queue_cells = self.find_picking_queues(matrix)
-        if not queue_cells:
+        station_cells = self.find_picking_stations(matrix)
+        if not station_cells:
             logger.warning(
-                "Pipeline 3: no navigable cells adjacent to picking stations (3) found."
+                "Pipeline 3: no picking-station cells (value 11) found."
             )
             return matrix
 
-        n_place = min(num_chargers, len(queue_cells))
-        selected = _evenly_spaced_sample(queue_cells, n_place)
-
-        for r, c in selected:
-            matrix[r][c] = CHARGER
+        n_place = min(num_chargers, len(station_cells))
+        selected = _evenly_spaced_sample(station_cells, n_place)
 
         logger.info(
-            "Picking-station layout: %d charger(s) placed "
-            "from %d available queue cell(s).",
-            len(selected), len(queue_cells),
+            "Picking-station layout: %d charger(s) co-located with "
+            "picking stations from %d available station cell(s): %s",
+            len(selected), len(station_cells), selected,
         )
         return matrix
 

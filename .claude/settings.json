@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('netlogo.py', doraise=True\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('model/robot.py', doraise=True\\)\")"
+    ]
+  }
+}

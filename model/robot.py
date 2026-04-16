@@ -885,6 +885,10 @@ class Robot(Object):
             print(f"Error in robot {self.id} with robotjob {self.job}")
             raise e
 
+        # Drive-by charging: fires every tick so robots charge even when
+        # stationary at a station (station_processing, idle, etc.).
+        self._apply_drive_by_charging()
+
         self.latest_tick += 1
 
     def drawNextPosition(self):
@@ -912,8 +916,8 @@ class Robot(Object):
                 self.pos_x -= distance_delta
         self.coordinate = NetLogoCoordinate(round(self.pos_x), round(self.pos_y))
 
-        # ── 4. Drive-by charging: replenish battery if on a charger cell ──────
-        self._apply_drive_by_charging()
+        # (Drive-by charging moved to move() so it fires every tick,
+        #  even when the robot is stationary at a station.)
 
         if self.acceleration != 0:
             self.velocity += (self.acceleration * self.universe.tick_to_second)

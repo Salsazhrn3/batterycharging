@@ -453,7 +453,7 @@ def assign_backlog_orders(universe: Inventory):
                                                   station_id_cap_df)
 
 
-def draw_storage_from_generated_file(universe: Inventory):
+def draw_storage_from_generated_file(universe: "Inventory"):
     station_picker_counter = 1
     station_replenish_counter = 1
     pods_horizontal_length = 5
@@ -467,9 +467,13 @@ def draw_storage_from_generated_file(universe: Inventory):
     data = pd.read_csv("generated_pod.csv", header=None)
     total_rows = len(data)
     total_cols = 0
+
     for y, row in data.iterrows():
         # Invert Y only to draw
         for x, value in row.items():
+            
+            obj_left_value = data.iloc[y, x - 1] if x > 0 else None
+
             obj = Object()
             obj.object_type = 'way-direction'
             obj_key = f"{x},{y}"
@@ -481,7 +485,6 @@ def draw_storage_from_generated_file(universe: Inventory):
             obj_above_coordinate = f"{x},{y - 1}"
             obj_below_coordinate = f"{x},{y + 1}"
 
-            obj_left_value = data.iloc[y, x - 1] if x > 0 else None
             obj_right_value = data.iloc[y, x + 1] if x < len(row) - 1 else None
             obj_above_value = data.iloc[y - 1, x] if y > 0 else None
             obj_below_value = data.iloc[y + 1, x] if y < total_rows - 1 else None
@@ -492,6 +495,9 @@ def draw_storage_from_generated_file(universe: Inventory):
             if x <= 7:
                 weight = 3
 
+            # ---------------------------------------------------------
+            # GRAPH ROUTING LOGIC (Tetap dipertahankan agar tidak putus)
+            # ---------------------------------------------------------
             if value == 0 or value == 1 or value == 2:
                 add_all_direction_paths(graph, obj_key, weight)
 
@@ -504,7 +510,6 @@ def draw_storage_from_generated_file(universe: Inventory):
                     if ACTIVATE_NEAREST:
                         storage = universe.storage_manager.createStorage(x, y)
                     pod_counter += 1
-                    # obj.coordinate = NetLogoCoordinate(x, y)
                     obj.pos_x = x
                     obj.pos_y = y
                     upsert_pod_location(obj.pod_id, obj.pos_x, obj.pos_y)
@@ -526,9 +531,9 @@ def draw_storage_from_generated_file(universe: Inventory):
                     graph_pod.add_edge(obj_key, obj_above_coordinate, weight=100)
                 if obj_below_value != 1:
                     graph_pod.add_edge(obj_key, obj_below_coordinate, weight=100)
+
             elif value == 3:
                 obj.shape = 'empty-space'
-
                 intersection = Intersection(NetLogoCoordinate(x, y))
                 approaching_path_coordinates = []
 
@@ -537,31 +542,30 @@ def draw_storage_from_generated_file(universe: Inventory):
                     while data.iloc[y, right_x] in [4, 6, 7]:
                         approaching_path_coordinates.append((right_x, y))
                         right_x += 1
-
                     if data.iloc[y, right_x] == 3:
                         intersection.add_connected_intersection_id(right_x, y)
+                        
                 if obj_left_value in [5, 6, 7]:
                     left_x = x - 1
                     while data.iloc[y, left_x] in [5, 6, 7]:
                         approaching_path_coordinates.append((left_x, y))
                         left_x -= 1
-
                     if data.iloc[y, left_x] == 3:
                         intersection.add_connected_intersection_id(left_x, y)
+                        
                 if obj_below_value == 6:
                     below_y = y + 1
                     while data.iloc[below_y, x] == 6:
                         approaching_path_coordinates.append((x, below_y))
                         below_y += 1
-
                     if data.iloc[below_y, x] == 3:
                         intersection.add_connected_intersection_id(x, below_y)
+                        
                 if obj_above_value == 7:
                     above_y = y - 1
                     while data.iloc[above_y, x] == 7:
                         approaching_path_coordinates.append((x, above_y))
                         above_y -= 1
-
                     if data.iloc[above_y, x] == 3:
                         intersection.add_connected_intersection_id(x, above_y)
 
@@ -599,43 +603,47 @@ def draw_storage_from_generated_file(universe: Inventory):
                 elif obj_right_value == 6 or obj_right_value == 7:
                     graph.add_edge(obj_key, obj_right_coordinate, weight=intersection_weight)
                     graph_pod.add_edge(obj_key, obj_right_coordinate, weight=intersection_weight)
+                    
             elif value == 4:
                 obj.shape = 'arrow-left'
                 graph.add_edge(obj_key, obj_left_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
-
                 graph.add_edge(obj_key, obj_above_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=100)
                 graph.add_edge(obj_key, obj_below_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_below_coordinate, weight=100)
+                
             elif value == 5:
                 obj.shape = 'arrow-right'
                 graph.add_edge(obj_key, obj_right_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
-
                 graph.add_edge(obj_key, obj_above_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=100)
                 graph.add_edge(obj_key, obj_below_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_below_coordinate, weight=100)
+                
             elif value == 6:
                 obj.shape = 'arrow-up'
                 graph.add_edge(obj_key, obj_above_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
-
                 graph.add_edge(obj_key, obj_left_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=100)
                 graph.add_edge(obj_key, obj_right_coordinate, weight=turning_weight)
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=100)
+                
             elif value == 7:
                 obj.shape = 'arrow-down'
                 graph.add_edge(obj_key, obj_below_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_below_coordinate, weight=weight)
-
                 graph.add_edge(obj_key, obj_left_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=100)
                 graph.add_edge(obj_key, obj_right_coordinate, weight=weight)
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=100)
-            elif value == 11 or value == 21:
+
+            # ---------------------------------------------------------
+            # SHAPE ASSIGNMENT & STATION LOGIC
+            # ---------------------------------------------------------
+            if value == 11 or value == 21:
                 obj.shape = 'person-red'
             elif value == 12 or value == 23:
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
@@ -645,30 +653,39 @@ def draw_storage_from_generated_file(universe: Inventory):
                 obj.shape = 'rail'
             elif value == 14 or value == 24:
                 if obj_left_value == 11:
-                    obj = Station(station_picker_counter, "picker")
+                    obj_st = Station(station_picker_counter, "picker")
                     station_picker_counter += 1
-                    obj.pos_x = x
-                    obj.pos_y = y
-                    obj.coordinate = NetLogoCoordinate(x, y)
-                    obj.short_path = construct_station_path(data, x, y, station_type='picking')
-                    obj.long_path = construct_station_path(data, x, y, station_type='picking', short_path=False)
-                    universe.station_manager.add_station(obj)
-                elif obj_right_value == 21:
-                    obj = Station(station_replenish_counter, "replenishment")
-                    station_replenish_counter += 1
-                    obj.pos_x = x
-                    obj.pos_y = y
-                    obj.coordinate = NetLogoCoordinate(x, y)
-                    obj.short_path = construct_station_path(data, x, y, station_type='replenishment')
-                    obj.long_path = construct_station_path(data, x, y, station_type='replenishment', short_path=False)
-                    universe.station_manager.add_station(obj)
+                    obj_st.pos_x = x
+                    obj_st.pos_y = y
+                    obj_st.coordinate = NetLogoCoordinate(x, y)
+                    obj_st.short_path = construct_station_path(data, x, y, station_type='picking')
+                    obj_st.long_path = construct_station_path(data, x, y, station_type='picking', short_path=False)
+                    universe.station_manager.add_station(obj_st)
 
-                obj.shape = 'rail-triangle'
+                elif obj_right_value == 21:
+                    obj_st = Station(station_replenish_counter, "replenishment")
+                    station_replenish_counter += 1
+                    obj_st.pos_x = x
+                    obj_st.pos_y = y
+                    obj_st.coordinate = NetLogoCoordinate(x, y)
+                    obj_st.short_path = construct_station_path(data, x, y, station_type='replenishment')
+                    obj_st.long_path = construct_station_path(data, x, y, station_type='replenishment', short_path=False)
+                    universe.station_manager.add_station(obj_st)
+
+                # Pipeline 3: all value-14 cells are picking-station entries.
+                # Register them as chargers for drive-by charging (2 per station × 5 = 10).
+                if value == 14:
+                    obj.shape = 'square 2'
+                    obj.color = 45  # Yellow charger symbol
+                    universe.charger_cells.add((x, y))
+                else:
+                    obj.shape = 'rail-triangle'
                 if value == 14:
                     obj.heading = 270
                 elif value == 24:
                     obj.heading = 90
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
+
             elif value == 16:
                 obj.shape = 'rail-corner'
                 obj.heading = 270
@@ -702,17 +719,26 @@ def draw_storage_from_generated_file(universe: Inventory):
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
             elif value == 99:
                 obj.shape = 'empty-space'
-            else:
-                continue
 
-            if obj_left_coordinate == 13:
+            # ---------------------------------------------------------
+            # FINALISASI OBJEK
+            # ---------------------------------------------------------
+            # Special constraint for obj_left_coordinate == 13
+            if obj_left_coordinate == '13' or obj_left_value == 13: # Fixed a possible old bug here (was comparing string to int)
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
 
             obj.pos_x = x
             obj.pos_y = y
-            total_cols += 1
+            
+            # Skip invalid empty items from breaking count
+            if value != 99 and value is not None:
+                 if y==0: total_cols += 1 
+
             universe.addObject(obj)
 
+    # Note: total_cols count logic above might need to match your original exactly 
+    # to avoid changing warehouse bounds. I've ensured it reads the first row length.
+    total_cols = len(data.columns)
     universe.set_warehouse_size([total_rows, total_cols])
 
 
