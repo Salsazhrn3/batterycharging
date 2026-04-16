@@ -75,6 +75,9 @@ class Inventory(Universe):
         # Set of (x, y) grid coordinates that are charging stations (cell value 2).
         # Populated by draw_storage_from_generated_file() in netlogo.py during setup.
         self.charger_cells: set = set()
+        # Tracks which charger cell is claimed by which robot (cell → robot_id).
+        # Prevents multiple robots from targeting the same charger.
+        self.occupied_chargers: dict = {}
         # self.currently_picking = {}
         # # Shared wrapper for the DataFrame
         # self.shared_data = {"df": pd.DataFrame()}
@@ -141,7 +144,10 @@ class Inventory(Universe):
                 nearest_robot: Optional[Robot] = None
 
                 for o in self.get_movable_objects():
-                    if o.object_type == "robot" and (o.job is None or o.job.is_finished) and o.current_state == 'idle':
+                    if (o.object_type == "robot"
+                            and (o.job is None or o.job.is_finished)
+                            and o.current_state == 'idle'
+                            and o.battery_pct >= o.BATTERY_LOW_PCT):
                         dist = calculateDistance(o.pos_x, o.pos_y, job.pod_coordinate.x, job.pod_coordinate.y)
                         if dist < current_distance:
                             nearest_robot = o
@@ -1456,8 +1462,11 @@ class Inventory(Universe):
                     # process
                     self.yyy(current_picker, order_ids)
                     return
-            print(f"")
-            raise AssertionError("WHAT???")
+            # Not enough candidates remained after preassignment.
+            # Assign whatever we collected so far instead of crashing.
+            if order_ids:
+                self.yyy(current_picker, order_ids)
+            return
 
     def yyy(self, station_id, order_ids):
         self.put_order_to_picking_station({station_id: order_ids})

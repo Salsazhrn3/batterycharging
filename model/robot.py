@@ -83,8 +83,12 @@ class Robot(Object):
     #
     BATTERY_CAPACITY_J: float = 6_480_000.0     # 1.8 kWh
     BATTERY_VOLTAGE_V: float = 14.2             # inferred from 1800 Wh / 126.76 Ah
-    BASE_DRAIN_RATE_PER_S: float = 90.0         # 5 %/hour of capacity → 90 J/s
+    BASE_DRAIN_RATE_PER_S: float = 5000.0       # TEST VALUE (real: 90.0 = 5%/hour)
     CHARGE_POWER_W: float = 397.6               # 28 A × 14.2 V
+
+    # ── Charging policy thresholds (Table 5 — Charging Rule Detail) ───────
+    BATTERY_LOW_PCT: float = 70.0               # Go charge when below this %
+    BATTERY_CHARGED_PCT: float = 80.0           # Stop charging when above this %
     
     
     
@@ -111,7 +115,9 @@ class Robot(Object):
         # Battery state — starts fully charged.
         self.battery_level_j: float = self.BATTERY_CAPACITY_J
         # Set to True on any tick the robot is physically over a charger cell.
-        self.is_charging: bool = False 
+        self.is_charging: bool = False
+        # The charger cell this robot has claimed (or None).
+        self._claimed_charger: Optional[tuple] = None
         # self.zone_boundary =[]
         # self.zone: Optional[Zone] = None
         super().__init__()
@@ -199,6 +205,70 @@ class Robot(Object):
         else:
             self.is_charging = False
 
+    def _start_charging_trip(self) -> bool:
+        """Navigate to the nearest *available* charger cell.
+
+        Guardrails that prevent the warehouse from stalling:
+        1. At most half the fleet may charge at the same time.
+        2. Each charger cell can only be claimed by one robot.
+        3. Nearest available (unclaimed) charger is picked.
+        """
+        charger_cells: set = getattr(self.universe, 'charger_cells', set())
+        if not charger_cells:
+            return False
+
+        occupied: dict = getattr(self.universe, 'occupied_chargers', {})
+
+        # ── Guard: limit concurrent charging to half the fleet ────────────
+        total_robots = sum(
+            1 for o in self.universe.get_movable_objects()
+            if o.object_type == "robot"
+        )
+        max_charging = max(1, total_robots // 2)
+        currently_charging = sum(
+            1 for o in self.universe.get_movable_objects()
+            if o.object_type == "robot"
+            and o.current_state == "going_to_charge"
+        )
+        if currently_charging >= max_charging:
+            return False
+
+        # ── Pick nearest available charger ────────────────────────────────
+        available = charger_cells - set(occupied.keys())
+        if not available:
+            return False
+
+        min_dist = float('inf')
+        nearest = None
+        for (cx, cy) in available:
+            dist = math.sqrt((cx - self.pos_x) ** 2 + (cy - self.pos_y) ** 2)
+            if dist < min_dist:
+                min_dist = dist
+                nearest = (cx, cy)
+
+        if nearest is None:
+            return False
+
+        dest = NetLogoCoordinate(nearest[0], nearest[1])
+        try:
+            self.set_move(dest, graph=self.universe.graph)
+            self.current_state = "going_to_charge"
+            occupied[nearest] = self.id  # claim the charger
+            self._claimed_charger = nearest
+            return True
+        except Exception:
+            return False
+
+    def _release_charger(self) -> None:
+        """Release the claimed charger cell so another robot can use it."""
+        cell = getattr(self, '_claimed_charger', None)
+        if cell is None:
+            return
+        occupied: dict = getattr(self.universe, 'occupied_chargers', {})
+        if occupied.get(cell) == self.id:
+            del occupied[cell]
+        self._claimed_charger = None
+
     def setPath(self, path):
         current_heading = self.heading
         route_stop_points = []
@@ -231,6 +301,8 @@ class Robot(Object):
             self.color = 46   # yellow
         elif self.current_state == "station_processing":
             self.color = 94   # blue
+        elif self.current_state == "going_to_charge":
+            self.color = 45   # yellow — heading to charger
         elif self.current_state == "idle":
             self.total_idle += 1
             self.color = 0    # black
@@ -339,6 +411,7 @@ class Robot(Object):
             'delivering_pod': 3,
             'returning_pod': 2,
             'taking_pod': 1,
+            'going_to_charge': 0,
             'idle': 0
         }
         is_replenish = False
@@ -450,6 +523,14 @@ class Robot(Object):
             station.coordinate, 0.1)
 
     def movementPlan(self):
+        # ── Charging policy: arrived at charger → wait until battery ≥ 80 % ──
+        if self.current_state == "going_to_charge" and not self.route_stop_points:
+            if self.battery_pct >= self.BATTERY_CHARGED_PCT:
+                self._release_charger()
+                self.current_state = "idle"
+            # Stay put and charge (handled by _apply_drive_by_charging every tick)
+            return
+
         if self.picking_item_in_pod():
             # print(f"robot {self.id} picking_item_in_pod")
             # print(f"robot job {self.job} and is_being_process {self.is_being_process_on_station()}")
@@ -464,6 +545,15 @@ class Robot(Object):
         if self.eligible_to_reroute():
             if self.current_state == "taking_pod":
                 self.set_move(self.route_stop_points[-1], self.universe.graph, avoid_side=True)
+            elif self.current_state == "going_to_charge":
+                # Give up this charger and pick a different one entirely.
+                self._release_charger()
+                self.current_state = "idle"
+                self.route_stop_points = []
+                self.velocity = 0
+                self.acceleration = 0
+                self.idle_time = 0
+                return  # Will trigger _start_charging_trip on next tick
             elif self.current_state == "delivering_pod" or self.current_state == "returning_pod":
                 self.set_move(self.route_stop_points[-1], self.universe.graph_pod, avoid_side=True)
             elif self.current_state == "station_processing":
@@ -879,6 +969,30 @@ class Robot(Object):
 
     def move(self):
         self.changeColorByState()
+
+        # ── Base operational drain — every tick, skip while on a charger ──
+        # (Charger powers the robot's electronics while plugged in.)
+        if not self.is_charging:
+            base_drain = self.BASE_DRAIN_RATE_PER_S * self.universe.tick_to_second
+            self.battery_level_j = max(0.0, self.battery_level_j - base_drain)
+
+        # ── Charging policy: if idle with low battery, go to nearest charger ──
+        if (self.current_state == "idle"
+                and (self.job is None or self.job.is_finished)
+                and self.battery_pct < self.BATTERY_LOW_PCT):
+            self._start_charging_trip()
+
+        # ── Stuck timeout: if going_to_charge robot is blocked too long,
+        #    release charger and try a different one next tick. ──
+        if (self.current_state == "going_to_charge"
+                and self.route_stop_points
+                and self.idle_time > 100):
+            self._release_charger()
+            self.current_state = "idle"
+            self.route_stop_points = []
+            self.velocity = 0
+            self.acceleration = 0
+
         try:
             self.movementPlan()
         except Exception as e:
@@ -899,9 +1013,9 @@ class Robot(Object):
         energy = self.calculateEnergy(initial_velocity, initial_acceleration)
         self.energy_consumption += energy
 
-        # ── 2. Drain the battery by motion energy + base operational drain ────
-        base_drain = self.BASE_DRAIN_RATE_PER_S * self.universe.tick_to_second
-        self.battery_level_j = max(0.0, self.battery_level_j - energy - base_drain)
+        # ── 2. Drain the battery by motion energy ─────────────────────────────
+        # (Base operational drain is applied in move() every tick instead.)
+        self.battery_level_j = max(0.0, self.battery_level_j - energy)
 
         # ── 3. Advance physical position ──────────────────────────────────────
         if self.velocity != 0:

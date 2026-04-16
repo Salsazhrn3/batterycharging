@@ -4,7 +4,15 @@
       "Bash(python -c ':*)",
       "Bash(grep -r \"if __name__\" /c/TA/netlogo_SA_8_new/*.py)",
       "Bash(python -c ' *)",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('model/robot.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('model/robot.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('model/inventory.py', doraise=True\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('model/robot.py', doraise=True\\); py_compile.compile\\('netlogo.py', doraise=True\\); py_compile.compile\\('model/inventory.py', doraise=True\\); print\\('All OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('netlogo.py', doraise=True\\); py_compile.compile\\('model/layout.py', doraise=True\\); print\\('OK'\\)\")",
+      "Bash(python -c \"from model.charging_layout_generator import ChargingLayoutGenerator; print\\('Import OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('model/robot.py', doraise=True\\); py_compile.compile\\('model/inventory.py', doraise=True\\); py_compile.compile\\('netlogo.py', doraise=True\\); print\\('All OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('model/inventory.py', doraise=True\\); py_compile.compile\\('model/robot.py', doraise=True\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('model/robot.py', doraise=True\\); py_compile.compile\\('model/inventory.py', doraise=True\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('netlogo.py', doraise=True\\); print\\('OK'\\)\")"
     ]
   }
 }

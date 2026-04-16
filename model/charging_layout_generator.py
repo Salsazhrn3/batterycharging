@@ -806,15 +806,3 @@ class ChargingLayoutGenerator:
         num_chargers: int = int(self.config.get("num_chargers", 10))
         return self.apply_perimeter_layout(work, num_chargers)
 
-    # ═════════════════════════════════════════════════════════════════════════
-    #  Private helpers
-    # ═════════════════════════════════════════════════════════════════════════
-
-    def _navigable_cells(self, matrix: Matrix) -> Set[Cell]:
-        """Return the set of all (row, col) cells whose value is NAVIGABLE (0)."""
-        return {
-            (int(r), int(c))
-            for r in range(matrix.shape[0])
-            for c in range(matrix.shape[1])
-            if matrix[r][c] == NAVIGABLE
-        }

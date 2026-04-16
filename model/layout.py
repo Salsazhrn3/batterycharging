@@ -1,4 +1,5 @@
 import csv
+import json
 import random
 
 class Layout(object):
@@ -56,15 +57,16 @@ class Layout(object):
 
         self.adjust_pod_availability(data_matrix)
         from model.charging_layout_generator import ChargingLayoutGenerator
-        generator = ChargingLayoutGenerator(data_matrix, {
-            "pipeline": 3, 
-            "num_chargers": 10
-        })
+        charging_config = {"pipeline": 4, "num_chargers": 10}
+        generator = ChargingLayoutGenerator(data_matrix, charging_config)
         data_matrix = generator.generate()
 
         with open('generated_pod.csv', 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerows(data_matrix)
+
+        with open('charging_config.json', 'w') as f:
+            json.dump(charging_config, f)
 
     def append_station_value(self, row, col, order_positions, replenish_positions):
         if col < self.reserved_column_station:

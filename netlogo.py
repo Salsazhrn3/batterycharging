@@ -1,4 +1,5 @@
 import csv
+import json
 import pickle
 import os
 import traceback
@@ -468,6 +469,13 @@ def draw_storage_from_generated_file(universe: "Inventory"):
     total_rows = len(data)
     total_cols = 0
 
+    # Load charging pipeline setting so we only apply pipeline-3 logic
+    # (value-14 cells as chargers) when pipeline 3 is actually selected.
+    _charging_pipeline = 0
+    if os.path.exists('charging_config.json'):
+        with open('charging_config.json', 'r') as f:
+            _charging_pipeline = json.load(f).get('pipeline', 0)
+
     for y, row in data.iterrows():
         # Invert Y only to draw
         for x, value in row.items():
@@ -643,13 +651,20 @@ def draw_storage_from_generated_file(universe: "Inventory"):
             # ---------------------------------------------------------
             # SHAPE ASSIGNMENT & STATION LOGIC
             # ---------------------------------------------------------
+            # Station-area cells are added to BOTH graph_pod AND graph.
+            # graph uses a high weight (50) so normal routing prefers aisles,
+            # but robots CAN navigate to/from chargers when needed.
+            _STATION_W = 50
+
             if value == 11 or value == 21:
                 obj.shape = 'person-red'
             elif value == 12 or value == 23:
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_right_coordinate, weight=_STATION_W)
                 obj.shape = 'rail'
             elif value == 13 or value == 22:
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_left_coordinate, weight=_STATION_W)
                 obj.shape = 'rail'
             elif value == 14 or value == 24:
                 if obj_left_value == 11:
@@ -672,9 +687,9 @@ def draw_storage_from_generated_file(universe: "Inventory"):
                     obj_st.long_path = construct_station_path(data, x, y, station_type='replenishment', short_path=False)
                     universe.station_manager.add_station(obj_st)
 
-                # Pipeline 3: all value-14 cells are picking-station entries.
-                # Register them as chargers for drive-by charging (2 per station × 5 = 10).
-                if value == 14:
+                # Pipeline 3 only: value-14 cells double as chargers
+                # (co-located with picking stations).
+                if value == 14 and _charging_pipeline == 3:
                     obj.shape = 'square 2'
                     obj.color = 45  # Yellow charger symbol
                     universe.charger_cells.add((x, y))
@@ -685,38 +700,47 @@ def draw_storage_from_generated_file(universe: "Inventory"):
                 elif value == 24:
                     obj.heading = 90
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_above_coordinate, weight=_STATION_W)
 
             elif value == 16:
                 obj.shape = 'rail-corner'
                 obj.heading = 270
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_right_coordinate, weight=_STATION_W)
             elif value == 17:
                 obj.shape = 'rail-corner'
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_above_coordinate, weight=_STATION_W)
             elif value == 18:
                 obj.shape = 'rail-corner'
                 obj.heading = 180
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_left_coordinate, weight=_STATION_W)
             elif value == 19:
                 obj.shape = 'rail-corner'
                 obj.heading = 90
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_above_coordinate, weight=_STATION_W)
             elif value == 26:
                 obj.shape = 'rail-corner'
                 obj.heading = 180
                 graph_pod.add_edge(obj_key, obj_left_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_left_coordinate, weight=_STATION_W)
             elif value == 27:
                 obj.shape = 'rail-corner'
                 obj.heading = 90
                 graph_pod.add_edge(obj_key, obj_below_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_below_coordinate, weight=_STATION_W)
             elif value == 28:
                 obj.shape = 'rail-corner'
                 obj.heading = 270
                 graph_pod.add_edge(obj_key, obj_right_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_right_coordinate, weight=_STATION_W)
             elif value == 29:
                 obj.shape = 'rail-corner'
                 obj.heading = 0
                 graph_pod.add_edge(obj_key, obj_above_coordinate, weight=weight)
+                graph.add_edge(obj_key, obj_above_coordinate, weight=_STATION_W)
             elif value == 99:
                 obj.shape = 'empty-space'
 
@@ -903,6 +927,8 @@ def setup():
 def tick():
     try:
         # Load the simulation state
+        if not os.path.exists('netlogo.state'):
+            return "ERROR: netlogo.state not found. Please run setup first."
         with open('netlogo.state', 'rb') as file:
             universe: Inventory = pickle.load(file)
 
@@ -933,6 +959,8 @@ def tick():
 def console_tick():
     try:
         # Load the simulation state
+        if not os.path.exists('netlogo.state'):
+            return "ERROR: netlogo.state not found. Please run setup first."
         with open('netlogo.state', 'rb') as file:
             universe: Inventory = pickle.load(file)
 
