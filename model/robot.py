@@ -83,8 +83,14 @@ class Robot(Object):
     #
     BATTERY_CAPACITY_J: float = 6_480_000.0     # 1.8 kWh
     BATTERY_VOLTAGE_V: float = 14.2             # inferred from 1800 Wh / 126.76 Ah
-    BASE_DRAIN_RATE_PER_S: float = 5000.0       # TEST VALUE (real: 90.0 = 5%/hour)
-    CHARGE_POWER_W: float = 397.6               # 28 A × 14.2 V
+    # ── Scale factor for accelerated testing ─────────────────────────────
+    # Multiply BOTH drain and charge by the same factor to speed up the
+    # charge/discharge cycle while keeping the ratio realistic.
+    # Set to 1.0 for real-spec behaviour.
+    _BATTERY_SPEED_FACTOR: float = 1.0          # 1.0 = real spec
+
+    BASE_DRAIN_RATE_PER_S: float = 90.0 * _BATTERY_SPEED_FACTOR    # real: 90 J/s
+    CHARGE_POWER_W: float = 397.6 * _BATTERY_SPEED_FACTOR          # real: 397.6 W
 
     # ── Charging policy thresholds (Table 5 — Charging Rule Detail) ───────
     BATTERY_LOW_PCT: float = 70.0               # Go charge when below this %

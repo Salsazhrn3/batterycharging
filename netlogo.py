@@ -469,12 +469,19 @@ def draw_storage_from_generated_file(universe: "Inventory"):
     total_rows = len(data)
     total_cols = 0
 
-    # Load charging pipeline setting so we only apply pipeline-3 logic
-    # (value-14 cells as chargers) when pipeline 3 is actually selected.
+    # Load charging config so we can apply pipeline-specific logic.
+    _charging_config = {}
     _charging_pipeline = 0
     if os.path.exists('charging_config.json'):
         with open('charging_config.json', 'r') as f:
-            _charging_pipeline = json.load(f).get('pipeline', 0)
+            _charging_config = json.load(f)
+            _charging_pipeline = _charging_config.get('pipeline', 0)
+
+    # Pipeline 1 (Set Cover) stores optimal charger positions as [[row,col],...].
+    # Build a lookup set of (x, y) = (col, row) for fast checking in the loop.
+    _overlay_chargers = set()
+    for pos in _charging_config.get('charger_positions', []):
+        _overlay_chargers.add((int(pos[1]), int(pos[0])))  # (x=col, y=row)
 
     for y, row in data.iterrows():
         # Invert Y only to draw
@@ -753,14 +760,21 @@ def draw_storage_from_generated_file(universe: "Inventory"):
 
             obj.pos_x = x
             obj.pos_y = y
-            
+
+            # Pipeline 1/2 overlay: register cell as charger without
+            # altering the graph edges set up above.
+            if (x, y) in _overlay_chargers:
+                universe.charger_cells.add((x, y))
+                obj.shape = 'square 2'
+                obj.color = 45
+
             # Skip invalid empty items from breaking count
             if value != 99 and value is not None:
-                 if y==0: total_cols += 1 
+                 if y==0: total_cols += 1
 
             universe.addObject(obj)
 
-    # Note: total_cols count logic above might need to match your original exactly 
+    # Note: total_cols count logic above might need to match your original exactly
     # to avoid changing warehouse bounds. I've ensured it reads the first row length.
     total_cols = len(data.columns)
     universe.set_warehouse_size([total_rows, total_cols])

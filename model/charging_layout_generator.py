@@ -78,6 +78,15 @@ TRAVERSABLE: FrozenSet[int] = frozenset({
     99                            # Blank space / safe zone
 })
 
+# Extended traversable for BFS: includes floor (0) and pod (1) cells
+# because robots physically traverse through these in the simulation.
+BFS_TRAVERSABLE: FrozenSet[int] = TRAVERSABLE | frozenset({0, 1})
+
+# Cells eligible for charger placement (Pipeline 1):
+# floor (deactivated pod) and active pod positions only.
+# Stations (11, 21) excluded — those are human staff positions.
+CHARGER_CANDIDATE_VALUES: FrozenSet[int] = frozenset({0, 1})
+
 # ── type aliases ──────────────────────────────────────────────────────────────
 Cell = Tuple[int, int]
 Matrix = np.ndarray
@@ -271,22 +280,21 @@ class ChargingLayoutGenerator:
         matrix: Matrix,
         candidate_locations: List[Cell],
         d: int,
+        traversable: FrozenSet[int] = TRAVERSABLE,
     ) -> Dict[Cell, Set[Cell]]:
         """
         Run BFS from every candidate location up to depth *d*.
-
-        Each BFS traverses only TRAVERSABLE cells (value 0 by default),
-        modelling a robot that cannot drive through pods or fixed stations.
 
         Parameters
         ----------
         matrix : Matrix
             Current warehouse grid (read-only inside this method).
         candidate_locations : list of (row, col)
-            Cells under consideration for charger placement.  Typically the
-            full set of navigable cells (value 0).
+            Cells under consideration for charger placement.
         d : int
             Maximum battery-distance in grid hops.
+        traversable : frozenset of int
+            Cell values the BFS may enter.
 
         Returns
         -------
@@ -294,7 +302,7 @@ class ChargingLayoutGenerator:
         reachable within *d* hops from that candidate.
         """
         return {
-            loc: bfs_on_grid(matrix, loc, d, TRAVERSABLE)
+            loc: bfs_on_grid(matrix, loc, d, traversable)
             for loc in candidate_locations
         }
 
@@ -358,39 +366,70 @@ class ChargingLayoutGenerator:
 
     def apply_set_cover_layout(self, matrix: Matrix, d: int) -> Matrix:
         """
-        Run the full set-cover pipeline and stamp CHARGER (2) values.
+        Run the full set-cover pipeline and record charger positions.
+
+        Candidate charger locations are restricted to warehouse floor (0),
+        pod/storage positions (1), and station cells (11, 21) — as defined
+        by ``CHARGER_CANDIDATE_VALUES``.  Aisles, rails, intersections, and
+        corners are excluded so chargers never block traffic infrastructure.
+
+        BFS uses ``BFS_TRAVERSABLE`` which extends ``TRAVERSABLE`` with
+        values 0 and 1, matching the cells robots physically traverse in
+        the simulation.
+
+        Selected positions are stored in
+        ``self.config["charger_positions"]`` as a list of [row, col] pairs.
+        netlogo.py reads this list and registers the cells as chargers
+        *without* altering their graph connectivity.
 
         Steps
         -----
-        1. Collect all navigable cells as the *universe* to be covered.
-        2. Treat every navigable cell as a candidate charger location.
-        3. BFS from each candidate to build its reachability subset.
-        4. Greedily pick candidates until every navigable cell is covered.
-        5. Write CHARGER (2) at each selected position.
+        1. Collect all BFS-traversable cells as the *universe* to cover.
+        2. Filter candidates to CHARGER_CANDIDATE_VALUES only.
+        3. BFS from each candidate over BFS_TRAVERSABLE to build subsets.
+        4. Greedily pick candidates until every reachable cell is covered.
+        5. Save selected positions to ``self.config["charger_positions"]``.
 
         Parameters
         ----------
         matrix : Matrix
-            Working copy of the warehouse grid (mutated in place).
+            Working copy of the warehouse grid (returned unmodified).
         d : int
             BFS depth limit (maximum robot travel distance to a charger).
 
         Returns
         -------
-        The modified matrix.
+        The unmodified matrix.
         """
-        nav: Set[Cell] = self._navigable_cells(matrix)
+        # Universe: all cells robots can physically visit.
+        universe: Set[Cell] = {
+            (int(r), int(c))
+            for r in range(matrix.shape[0])
+            for c in range(matrix.shape[1])
+            if matrix[r][c] in BFS_TRAVERSABLE
+        }
+
+        # Candidates: only floor, pod, and station cells.
+        candidates: List[Cell] = [
+            (int(r), int(c))
+            for r in range(matrix.shape[0])
+            for c in range(matrix.shape[1])
+            if matrix[r][c] in CHARGER_CANDIDATE_VALUES
+        ]
+
         logger.info(
-            "Set Cover: %d navigable cells, BFS depth d=%d.", len(nav), d
+            "Set Cover: %d universe cells, %d candidates, BFS depth d=%d.",
+            len(universe), len(candidates), d,
         )
 
-        candidates = list(nav)
-        subsets = self.get_reachability_subsets(matrix, candidates, d)
-        selected = self.greedy_set_cover(nav, subsets)
+        subsets = self.get_reachability_subsets(matrix, candidates, d, BFS_TRAVERSABLE)
+        selected = self.greedy_set_cover(universe, subsets)
 
         logger.info("Set Cover: %d charger(s) selected.", len(selected))
-        for r, c in selected:
-            matrix[r][c] = CHARGER
+
+        # Store positions as JSON-serialisable list (do NOT stamp the grid).
+        self.config["charger_positions"] = [[r, c] for r, c in selected]
+        self.config["num_chargers"] = len(selected)
 
         return matrix
 
