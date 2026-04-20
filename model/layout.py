@@ -57,7 +57,7 @@ class Layout(object):
 
         self.adjust_pod_availability(data_matrix)
         from model.charging_layout_generator import ChargingLayoutGenerator
-        charging_config = {"pipeline": 1, "d": 15}
+        charging_config = {"pipeline": 2, "c": 1.0, "alpha": 1.0, "beta": 1.0, "gamma": 1.0}
         generator = ChargingLayoutGenerator(data_matrix, charging_config)
         data_matrix = generator.generate()
 

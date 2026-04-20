@@ -570,6 +570,12 @@ class Robot(Object):
 
             self.idle_time = 0
 
+        # Head-to-head collision: two robots facing each other and stuck for
+        # 2+ ticks.  Reroute the yielding one immediately instead of waiting
+        # for the 50-tick general reroute threshold above.
+        if self.idle_time >= 2 and self._try_head_to_head_reroute():
+            return
+
         if not self.route_stop_points:
             return
 
@@ -702,6 +708,79 @@ class Robot(Object):
 
         # Resolve ties by ID
         return self.robotID(self.robotName()) < self.robotID(robot_front['label'])
+
+    _OPPOSITE_HEADING = {0: 180, 180: 0, 90: 270, 270: 90}
+
+    def _try_head_to_head_reroute(self) -> bool:
+        """Detect a head-to-head collision and reroute this robot if it should yield.
+
+        Two robots are "head-to-head" when they face exactly opposite directions
+        and the cell directly in front of this robot is occupied by the other.
+        Just waiting is futile — neither side can progress.  The yielding robot
+        (lower priority, or lower ID on ties) recomputes its route using
+        ``avoid_side=True`` so Dijkstra routes around the oncoming robot.
+
+        Returns True if a reroute was executed (caller should return early).
+        """
+        if not self.route_stop_points:
+            return False
+        if self.is_in_station_path():
+            return False
+        if not isinstance(self.route_stop_points[0], NetLogoCoordinate):
+            return False
+
+        next_step = self._calculate_next_blocks(
+            round(self.pos_x), round(self.pos_y),
+            self.heading, 1, include_self=False,
+        )
+        if not next_step:
+            return False
+
+        robot_front = self.universe.landscape.get_neighbor_object(*next_step[0])
+        if robot_front is None:
+            return False
+
+        other = self.get_robot_by_name(robot_front['label'])
+        if other is None or other is self:
+            return False
+
+        # Facing each other?
+        if robot_front['heading'] != self._OPPOSITE_HEADING.get(self.heading):
+            return False
+
+        # The other robot must be actively navigating, not merely parked.
+        if not other.route_stop_points:
+            return False
+
+        # Decide who yields: lower priority, or lower ID on a tie.
+        priority_diff = self.get_priority_diff(robot_front)
+        if priority_diff > 0:
+            return False
+        if priority_diff == 0:
+            if self.robotID(self.robotName()) >= self.robotID(robot_front['label']):
+                return False
+
+        # This robot yields — reroute via an alternative path.
+        dest = self.route_stop_points[-1]
+        try:
+            if self.current_state == "going_to_charge":
+                # Release this charger claim and pick a different one next tick.
+                self._release_charger()
+                self.current_state = "idle"
+                self.route_stop_points = []
+                self.velocity = 0
+                self.acceleration = 0
+                self.idle_time = 0
+                return True
+            if self.current_state in ("delivering_pod", "returning_pod"):
+                self.set_move(dest, self.universe.graph_pod, avoid_side=True)
+            else:
+                self.set_move(dest, self.universe.graph, avoid_side=True)
+            self.idle_time = 0
+            return True
+        except Exception:
+            # No alternative path — fall through to the existing wait behavior.
+            return False
 
     def calculate_next_movement_from_conflict(self, conflict_coordinate: NetLogoCoordinate,
                                               next_destination_coordinate: NetLogoCoordinate):

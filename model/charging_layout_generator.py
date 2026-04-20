@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import logging
 import math
-import random
 from collections import deque
 from typing import Dict, FrozenSet, List, Set, Tuple
 
@@ -447,23 +446,26 @@ class ChargingLayoutGenerator:
         c: float = 1.0,
     ) -> Dict[int, List[Cell]]:
         """
-        Cluster navigable cells via Affinity Propagation (Baras et al. 2004).
+        Cluster candidate cells via Affinity Propagation (Baras et al. 2023).
 
-        Similarity matrix construction
-        ───────────────────────────────
+        Candidate set (Pipeline 2 restriction)
+        ──────────────────────────────────────
+        Only floor (0) and pod (1) cells are clustered — matches Pipeline 1's
+        ``CHARGER_CANDIDATE_VALUES`` filter so Pipeline 2 cannot place chargers
+        on aisles, rails, corners, or human staff stations.
+
+        Similarity matrix construction (Baras et al. 2023, Eq. 1)
+        ─────────────────────────────────────────────────────────
         Off-diagonal  S[i, j] = −Manhattan(i, j)²
             Nearby cells in the grid are more similar; the squared penalty
             strongly discourages merging distant cells into one cluster.
 
-        Diagonal (preference)  S[i, i] = −log(c + traffic[i])
+        Diagonal (preference)  S[i, i] = +log(c + traffic[i])
             The preference controls how willing a cell is to become an
-            exemplar (cluster centre).  With c = 1 and traffic ≥ 0:
-              • traffic → 0   ⟹  S[i,i] → 0    (neutral)
-              • traffic → ∞   ⟹  S[i,i] → −∞   (suppressed as exemplar)
-
-            **Sign note:** as specified, this formula makes high-traffic
-            cells *less* likely to become exemplars.  If you want high-traffic
-            cells to attract cluster centres, use S[i,i] = +log(c+traffic[i]).
+            exemplar (cluster centre).  High-traffic cells get a HIGHER
+            self-similarity and therefore attract more clusters, exactly
+            as the paper's text describes.  The sign was flipped relative
+            to the earlier implementation, which had the opposite behaviour.
 
         Requires
         --------
@@ -488,21 +490,29 @@ class ChargingLayoutGenerator:
                 "Install it with:  pip install scikit-learn"
             ) from exc
 
-        nav_cells: List[Cell] = sorted(self._navigable_cells(self.matrix))
+        # Candidates: floor (0) and pod (1) cells only.
+        nav_cells: List[Cell] = sorted(
+            (int(r), int(c))
+            for r in range(self.rows)
+            for c in range(self.cols)
+            if self.matrix[r][c] in CHARGER_CANDIDATE_VALUES
+        )
         n = len(nav_cells)
         if n == 0:
-            logger.warning("AP: no navigable cells found in the grid.")
+            logger.warning("AP: no candidate cells (floor/pod) found in the grid.")
             return {}
 
         # ── optional subsampling to keep the N×N matrix tractable ──────────
         max_cells: int = int(self.config.get("max_ap_cells", 2_000))
         if max_cells > 0 and n > max_cells:
             logger.warning(
-                "AP: %d navigable cells exceeds max_ap_cells=%d; "
-                "randomly subsampling to keep computation tractable.",
+                "AP: %d candidate cells exceeds max_ap_cells=%d; "
+                "deterministically subsampling to keep computation tractable.",
                 n, max_cells,
             )
-            nav_cells = random.sample(nav_cells, max_cells)
+            rng = np.random.default_rng(42)
+            idxs = sorted(rng.choice(n, size=max_cells, replace=False).tolist())
+            nav_cells = [nav_cells[i] for i in idxs]
             n = max_cells
 
         # ── build N×N similarity matrix ─────────────────────────────────────
@@ -515,13 +525,19 @@ class ChargingLayoutGenerator:
             mdist = diff[:, 0] + diff[:, 1]        # (N,)    Manhattan distance
             S[i] = -(mdist ** 2)
 
-        # Override diagonal with per-cell preference scores
+        # Diagonal (Baras et al. 2023, Eq. 1): +log(c + traffic[i])
         for i, (r, col_idx) in enumerate(nav_cells):
             traffic_val = float(traffic_matrix[r][col_idx])
-            S[i, i] = -math.log(c + traffic_val)
+            S[i, i] = math.log(c + traffic_val)
 
         # ── fit AP with precomputed similarity ──────────────────────────────
-        ap = _AP(affinity="precomputed", random_state=42, max_iter=300)
+        ap = _AP(
+            affinity="precomputed",
+            random_state=42,
+            max_iter=400,
+            convergence_iter=25,
+            damping=0.9,
+        )
         ap.fit(S)
 
         # ── group cells by cluster label ─────────────────────────────────────
@@ -543,35 +559,35 @@ class ChargingLayoutGenerator:
         """
         Score every candidate cell in a cluster for charger placement.
 
-        Scoring function
-        ────────────────
-        Score(c) = α · Traffic(c)
+        Scoring function (Baras et al. 2023, Eq. 2)
+        ──────────────────────────────────────────
+        Score(c) = α · TrafficDesirability(c)
                  − β · ProximityToShelves(c)
                  − γ · DistanceFromHighTrafficCell(c)
 
         where:
-          ``Traffic(c)``
-              Raw traffic density value from *traffic_matrix* at cell *c*.
+          ``TrafficDesirability(c) = 1 − (Traffic(c) − mean(Traffic))²``
+              Inverted bell around the cluster mean.  Rewards cells whose
+              traffic is close to the typical robot flow through the cluster
+              and penalises extremes (idle pockets AND congested hotspots).
 
           ``ProximityToShelves(c)``
-              Binary penalty: 1 if any 4-connected neighbour in the
-              *original* warehouse grid (``self.matrix``) is a storage pod
-              (value 1), else 0.  Penalises positions that would block
-              pod retrieval lanes.
+              Binary penalty: 1 if any 4-connected neighbour in the original
+              warehouse grid (``self.matrix``) is a storage pod (value 1),
+              else 0.  Keeps chargers out of pod retrieval lanes.
 
           ``DistanceFromHighTrafficCell(c)``
-              Manhattan distance from *c* to the cell in *cluster_cells*
-              with the maximum traffic value.  Rewards chargers near the
-              busiest part of each cluster.
-
-        Higher score ⟹ better placement.
+              Manhattan distance from *c* to the cluster's hottest cell
+              (max traffic).  The paper includes this term to keep chargers
+              close to peak demand and minimise robot downtime when they
+              need to recharge.
 
         Parameters
         ----------
         cluster_cells : list of (row, col)
         traffic_matrix : Matrix
         alpha, beta, gamma : float
-            Relative importance weights for each term.
+            Relative importance weights.
 
         Returns
         -------
@@ -580,7 +596,14 @@ class ChargingLayoutGenerator:
         if not cluster_cells:
             return {}
 
-        # Identify the hotspot (highest-traffic cell) in this cluster
+        # Cluster-local mean traffic drives the inverted bell.
+        vals = np.array(
+            [float(traffic_matrix[r][c]) for r, c in cluster_cells],
+            dtype=np.float64,
+        )
+        mean_traffic = float(vals.mean())
+
+        # Hotspot: cell with maximum traffic in this cluster.
         hot_cell: Cell = max(
             cluster_cells, key=lambda rc: traffic_matrix[rc[0]][rc[1]]
         )
@@ -598,10 +621,11 @@ class ChargingLayoutGenerator:
             )
             prox_penalty = 1.0 if adj_to_pod else 0.0
 
+            td = 1.0 - (traffic_val - mean_traffic) ** 2
             dist_from_hot = manhattan(r, c, hot_cell[0], hot_cell[1])
 
             scores[(r, c)] = (
-                alpha * traffic_val
+                alpha * td
                 - beta  * prox_penalty
                 - gamma * dist_from_hot
             )
@@ -612,21 +636,24 @@ class ChargingLayoutGenerator:
         self, matrix: Matrix, traffic_matrix: Matrix
     ) -> Matrix:
         """
-        AP-cluster the grid, score candidates per cluster, stamp chargers.
+        AP-cluster the grid, score candidates per cluster, record chargers.
 
         One charger is placed per AP cluster, at the cell with the highest
-        placement score.
+        placement score.  Positions are stored in
+        ``self.config["charger_positions"]`` (overlay approach used by
+        Pipeline 1); the grid itself is NOT mutated so the directed graph
+        rail/intersection cells remain intact.
 
         Parameters
         ----------
         matrix : Matrix
-            Working copy of the warehouse grid (mutated in place).
+            Working copy of the warehouse grid (returned unmodified).
         traffic_matrix : Matrix
             Robot-traffic density grid (same shape as *matrix*).
 
         Returns
         -------
-        The modified matrix.
+        The unmodified matrix.
         """
         c     = float(self.config.get("c",     1.0))
         alpha = float(self.config.get("alpha", 1.0))
@@ -634,7 +661,7 @@ class ChargingLayoutGenerator:
         gamma = float(self.config.get("gamma", 1.0))
 
         clusters = self.run_affinity_propagation(traffic_matrix, c)
-        placed = 0
+        selected: List[Cell] = []
 
         for label, cells in clusters.items():
             scores = self.calculate_placement_score(
@@ -644,29 +671,73 @@ class ChargingLayoutGenerator:
                 continue
 
             best_cell = max(scores, key=scores.__getitem__)
-            r, col_idx = best_cell
-            matrix[r][col_idx] = CHARGER
-            placed += 1
+            selected.append(best_cell)
             logger.debug(
                 "AP cluster %d → charger at (%d, %d)  score=%.3f",
-                label, r, col_idx, scores[best_cell],
+                label, best_cell[0], best_cell[1], scores[best_cell],
             )
 
-        logger.info("AP traffic layout: %d charger(s) placed.", placed)
+        logger.info("AP traffic layout: %d charger(s) selected.", len(selected))
+
+        self.config["charger_positions"] = [[int(r), int(c)] for r, c in selected]
+        self.config["num_chargers"] = len(selected)
+
         return matrix
+
+    def _build_station_proximity_traffic(self, tau: float = 8.0) -> Matrix:
+        """
+        Heuristic traffic density when no measured traffic_matrix is given.
+
+        Multi-source BFS from every picking (11) and replenishment (21) cell
+        over BFS_TRAVERSABLE; each reachable cell gets
+            traffic(c) = exp(-hop_distance / tau).
+
+        Robots converge on stations, so cells closer to stations see more
+        pod-delivery flows.  tau controls decay: smaller tau = more
+        concentrated hotspots.
+        """
+        rows, cols = self.matrix.shape
+        dist = np.full((rows, cols), 10_000, dtype=np.int32)
+        q: deque[Cell] = deque()
+        for r in range(rows):
+            for c in range(cols):
+                if self.matrix[r][c] in (11, 21):
+                    dist[r, c] = 0
+                    q.append((r, c))
+        while q:
+            r, c = q.popleft()
+            for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                nr, nc = r + dr, c + dc
+                if (
+                    0 <= nr < rows and 0 <= nc < cols
+                    and self.matrix[nr, nc] in BFS_TRAVERSABLE
+                    and dist[nr, nc] > dist[r, c] + 1
+                ):
+                    dist[nr, nc] = dist[r, c] + 1
+                    q.append((nr, nc))
+        traffic = np.where(
+            dist < 10_000,
+            np.exp(-dist.astype(np.float64) / tau),
+            0.0,
+        )
+        return traffic
 
     def _pipeline_affinity(self, work: Matrix) -> Matrix:
         raw_traffic = self.config.get("traffic_matrix")
         if raw_traffic is None:
-            raise ValueError(
-                "Pipeline 2 requires 'traffic_matrix' in the config dict."
+            tau = float(self.config.get("traffic_tau", 8.0))
+            logger.info(
+                "Pipeline 2: no traffic_matrix supplied, using station-proximity "
+                "heuristic with tau=%.2f.", tau,
             )
-        traffic: Matrix = np.array(raw_traffic, dtype=np.float64)
-        if traffic.shape != self.matrix.shape:
-            raise ValueError(
-                f"traffic_matrix shape {traffic.shape} does not match "
-                f"data_matrix shape {self.matrix.shape}."
-            )
+            traffic: Matrix = self._build_station_proximity_traffic(tau=tau)
+        else:
+            traffic = np.array(raw_traffic, dtype=np.float64)
+            if traffic.shape != self.matrix.shape:
+                raise ValueError(
+                    f"traffic_matrix shape {traffic.shape} does not match "
+                    f"data_matrix shape {self.matrix.shape}."
+                )
         return self.apply_traffic_layout(work, traffic)
 
     # ═════════════════════════════════════════════════════════════════════════

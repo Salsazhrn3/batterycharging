@@ -12,7 +12,10 @@
       "Bash(python -c \"import py_compile; py_compile.compile\\('model/robot.py', doraise=True\\); py_compile.compile\\('model/inventory.py', doraise=True\\); py_compile.compile\\('netlogo.py', doraise=True\\); print\\('All OK'\\)\")",
       "Bash(python -c \"import py_compile; py_compile.compile\\('model/inventory.py', doraise=True\\); py_compile.compile\\('model/robot.py', doraise=True\\); print\\('OK'\\)\")",
       "Bash(python -c \"import py_compile; py_compile.compile\\('model/robot.py', doraise=True\\); py_compile.compile\\('model/inventory.py', doraise=True\\); print\\('OK'\\)\")",
-      "Bash(python -c \"import py_compile; py_compile.compile\\('netlogo.py', doraise=True\\); print\\('OK'\\)\")"
+      "Bash(python -c \"import py_compile; py_compile.compile\\('netlogo.py', doraise=True\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import sklearn; print\\('sklearn', sklearn.__version__\\)\")",
+      "Bash(python pipeline2_analysis.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python pipeline2_analysis.py)"
     ]
   }
 }
