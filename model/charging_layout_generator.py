@@ -86,6 +86,16 @@ BFS_TRAVERSABLE: FrozenSet[int] = TRAVERSABLE | frozenset({0, 1})
 # Stations (11, 21) excluded — those are human staff positions.
 CHARGER_CANDIDATE_VALUES: FrozenSet[int] = frozenset({0, 1})
 
+# Cells eligible for Pipeline 2 (AP) charger placement — stricter than
+# CHARGER_CANDIDATE_VALUES.  Only value 0 (warehouse floor / deactivated
+# pod slot) is allowed because:
+#   • Pods (1) are excluded — AP tends to bunch chargers along pod
+#     columns, and stacked chargers in a pod lane break Dijkstra routing.
+#   • Blank-space (99) cells are excluded — netlogo.py adds routing-graph
+#     nodes only for values {0, 1, 2}, so a charger on a 99 cell is
+#     unreachable by the pathfinder at runtime.
+AP_SAFE_CANDIDATE_VALUES: FrozenSet[int] = frozenset({0})
+
 # ── type aliases ──────────────────────────────────────────────────────────────
 Cell = Tuple[int, int]
 Matrix = np.ndarray
@@ -450,9 +460,13 @@ class ChargingLayoutGenerator:
 
         Candidate set (Pipeline 2 restriction)
         ──────────────────────────────────────
-        Only floor (0) and pod (1) cells are clustered — matches Pipeline 1's
-        ``CHARGER_CANDIDATE_VALUES`` filter so Pipeline 2 cannot place chargers
-        on aisles, rails, corners, or human staff stations.
+        Only floor (0) cells are clustered — Pipeline 2 uses the stricter
+        ``AP_SAFE_CANDIDATE_VALUES`` filter rather than Pipeline 1's
+        ``CHARGER_CANDIDATE_VALUES``.  Pods (1) are excluded because AP
+        tends to bunch chargers along pod columns, producing stacks that
+        break Dijkstra routing.  Blank-space (99) cells are excluded too
+        because netlogo.py only adds routing-graph nodes for values
+        {0, 1, 2}, so a charger placed on 99 is unreachable at runtime.
 
         Similarity matrix construction (Baras et al. 2023, Eq. 1)
         ─────────────────────────────────────────────────────────
@@ -490,16 +504,18 @@ class ChargingLayoutGenerator:
                 "Install it with:  pip install scikit-learn"
             ) from exc
 
-        # Candidates: floor (0) and pod (1) cells only.
+        # Candidates: floor (0) cells only — pods and blank-space excluded.
         nav_cells: List[Cell] = sorted(
             (int(r), int(c))
             for r in range(self.rows)
             for c in range(self.cols)
-            if self.matrix[r][c] in CHARGER_CANDIDATE_VALUES
+            if self.matrix[r][c] in AP_SAFE_CANDIDATE_VALUES
         )
         n = len(nav_cells)
         if n == 0:
-            logger.warning("AP: no candidate cells (floor/pod) found in the grid.")
+            logger.warning(
+                "AP: no safe candidate cells (floor) found in the grid."
+            )
             return {}
 
         # ── optional subsampling to keep the N×N matrix tractable ──────────
@@ -659,9 +675,16 @@ class ChargingLayoutGenerator:
         alpha = float(self.config.get("alpha", 1.0))
         beta  = float(self.config.get("beta",  1.0))
         gamma = float(self.config.get("gamma", 1.0))
+        # Optional hard cap: if AP yields more clusters than we want chargers,
+        # keep only the top-`max_chargers` by placement score.  Default None
+        # means "one charger per AP cluster" (paper-faithful behaviour).
+        max_chargers = self.config.get("num_chargers")
+        if max_chargers is not None:
+            max_chargers = int(max_chargers)
 
         clusters = self.run_affinity_propagation(traffic_matrix, c)
-        selected: List[Cell] = []
+        ranked: List[Tuple[float, Cell, int]] = []  # (score, cell, cluster_label)
+        all_cell_scores: Dict[Cell, float] = {}     # union across clusters
 
         for label, cells in clusters.items():
             scores = self.calculate_placement_score(
@@ -669,12 +692,54 @@ class ChargingLayoutGenerator:
             )
             if not scores:
                 continue
-
+            all_cell_scores.update(scores)
             best_cell = max(scores, key=scores.__getitem__)
-            selected.append(best_cell)
+            ranked.append((scores[best_cell], best_cell, label))
+
+        # Rank cluster winners globally (highest score first) and apply cap.
+        ranked.sort(key=lambda t: t[0], reverse=True)
+        if max_chargers is not None and len(ranked) > max_chargers:
+            logger.info(
+                "AP traffic layout: %d cluster(s) produced, capping to top %d "
+                "by placement score.",
+                len(ranked), max_chargers,
+            )
+            ranked = ranked[:max_chargers]
+
+        selected: List[Cell] = [cell for _, cell, _ in ranked]
+        for score, cell, label in ranked:
             logger.debug(
                 "AP cluster %d → charger at (%d, %d)  score=%.3f",
-                label, best_cell[0], best_cell[1], scores[best_cell],
+                label, cell[0], cell[1], score,
+            )
+
+        # Top-up: if AP produced fewer clusters than num_chargers requested,
+        # fill remaining slots from top-scored candidates enforcing a
+        # minimum Manhattan separation from already-selected chargers to
+        # prevent stacking in a single corridor.
+        min_sep = int(self.config.get("ap_min_separation", 3))
+        if max_chargers is not None and len(selected) < max_chargers:
+            remaining = max_chargers - len(selected)
+            pool = [
+                (s, cell) for cell, s in all_cell_scores.items()
+                if cell not in set(selected)
+            ]
+            pool.sort(key=lambda t: t[0], reverse=True)
+            added = 0
+            for score, cell in pool:
+                if added >= remaining:
+                    break
+                if all(manhattan(cell[0], cell[1], r, c) >= min_sep
+                       for r, c in selected):
+                    selected.append(cell)
+                    added += 1
+                    logger.debug(
+                        "AP top-up → charger at (%d, %d)  score=%.3f",
+                        cell[0], cell[1], score,
+                    )
+            logger.info(
+                "AP traffic layout: topped-up with %d extra charger(s) "
+                "(min_separation=%d).", added, min_sep,
             )
 
         logger.info("AP traffic layout: %d charger(s) selected.", len(selected))

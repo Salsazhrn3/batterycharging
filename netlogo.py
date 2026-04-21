@@ -970,7 +970,7 @@ def tick():
         traceback.print_exc()
         return "An error occurred. See the details above."
     
-def console_tick():
+def console_tick(max_ticks: int = 28800, heartbeat_every: int = 2000):
     try:
         # Load the simulation state
         if not os.path.exists('netlogo.state'):
@@ -984,18 +984,20 @@ def console_tick():
         while True:
             # Perform a simulation tick
             next_result = universe.tick()
-            if universe._tick > 28800:
-                return IndexError
-
-        # Save updated state
-        with open('netlogo.state', 'wb') as config_dictionary_file:
-            pickle.dump(universe, config_dictionary_file)
-
-        # Return all required information for NetLogo
-        # next_result[0] contains object positions
-        # next_result[1] contains station orders
-        return [next_result[0], universe.total_energy, len(universe.job_queue), universe.stop_and_go,
-                universe.total_turning, next_result[1]]
+            if heartbeat_every and universe._tick % heartbeat_every == 0:
+                print(f"[heartbeat] tick={universe._tick}/{max_ticks}", flush=True)
+            if universe._tick > max_ticks:
+                # Persist final state and return a summary dict.
+                with open('netlogo.state', 'wb') as _sf:
+                    pickle.dump(universe, _sf)
+                return {
+                    "status": "done",
+                    "final_tick": universe._tick,
+                    "total_energy": getattr(universe, "total_energy", None),
+                    "pending_jobs": len(getattr(universe, "job_queue", [])),
+                    "stop_and_go": getattr(universe, "stop_and_go", None),
+                    "total_turning": getattr(universe, "total_turning", None),
+                }
 
     except Exception as e:
         # Print complete stack trace

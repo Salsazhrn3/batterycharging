@@ -1,0 +1,2 @@
+pipeline,horizon_s,wallclock_s,num_robots,num_chargers,orders_completed,throughput_per_sim_hour,cycle_time_mean_s,cycle_time_median_s,cycle_time_p95_s,total_energy_j,energy_per_order_j,stop_and_go,total_turning,pending_jobs_at_end,battery_pct_mean,battery_pct_min,robots_charging_now,robots_going_to_charge
+3,28800,2943.44,20,12,534,66.75,454.98,364.5,1144.6,11424908.7,21395.0,120472,11388,16,56.48,55.27,0,0

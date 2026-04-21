@@ -15,7 +15,19 @@
       "Bash(python -c \"import py_compile; py_compile.compile\\('netlogo.py', doraise=True\\); print\\('OK'\\)\")",
       "Bash(python -c \"import sklearn; print\\('sklearn', sklearn.__version__\\)\")",
       "Bash(python pipeline2_analysis.py)",
-      "Bash(PYTHONIOENCODING=utf-8 python pipeline2_analysis.py)"
+      "Bash(PYTHONIOENCODING=utf-8 python pipeline2_analysis.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python eval/run_one.py --pipeline 1 --horizon 1000 --heartbeat 200)",
+      "Bash(python eval/extract_kpis.py --pipeline 1)",
+      "Bash(tasklist //FI \"IMAGENAME eq python.exe\")",
+      "Bash(awk '{print $5/1024/1024 \" MB\"}')",
+      "Bash(tasklist)",
+      "Bash(python -c 'import json; d=json.load\\(open\\('\\\\''eval/runs/p__TRACKED_VAR__/run_summary.json'\\\\''\\)\\); print\\('\\\\''tick_result type:'\\\\'', type\\(d.get\\('\\\\''tick_result'\\\\''\\)\\).__name__\\); print\\('\\\\''tick_result:'\\\\'', repr\\(d.get\\('\\\\''tick_result'\\\\''\\)\\)[:200]\\)')",
+      "Bash(python eval/extract_kpis.py --all)",
+      "Bash(python eval/aggregate.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python eval/run_all.py --horizon 28800 --heartbeat 2000)",
+      "Bash(kill %1)",
+      "Bash(taskkill //PID 16052 //F)",
+      "Bash(python -c \"import json; d=json.load\\(open\\('eval/runs/p2/run_summary.json'\\)\\); print\\(repr\\(d.get\\('tick_result'\\)\\)\\)\")"
     ]
   }
 }
