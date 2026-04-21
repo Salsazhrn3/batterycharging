@@ -1062,9 +1062,12 @@ class Robot(Object):
             self.battery_level_j = max(0.0, self.battery_level_j - base_drain)
 
         # ── Charging policy: if idle with low battery, go to nearest charger ──
+        # Skipped when universe.disable_active_charging is True (opportunity-
+        # only mode — robots rely solely on drive-by charging at picker dwells).
         if (self.current_state == "idle"
                 and (self.job is None or self.job.is_finished)
-                and self.battery_pct < self.BATTERY_LOW_PCT):
+                and self.battery_pct < self.BATTERY_LOW_PCT
+                and not getattr(self.universe, "disable_active_charging", False)):
             self._start_charging_trip()
 
         # ── Stuck timeout: if going_to_charge robot is blocked too long,

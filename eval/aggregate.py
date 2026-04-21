@@ -33,6 +33,11 @@ PIPELINE_NAMES = {
     4: "Perimeter",
 }
 
+# Extra variants displayed alongside the core pipelines.
+VARIANT_NAMES = {
+    "3_opp": "P3-OppCharge",
+}
+
 # Metrics to print in the comparison (column order)
 METRICS = [
     ("orders_completed",      "Orders done",        "higher better"),
@@ -54,15 +59,19 @@ METRICS = [
 ]
 
 
-def load_results() -> dict[int, dict]:
-    out: dict[int, dict] = {}
+def load_results() -> dict:
+    """Load all run_p{tag}.csv rows keyed by integer or variant-string tag."""
+    out: dict = {}
     for P in (1, 2, 3, 4):
         path = RESULTS_DIR / f"run_p{P}.csv"
-        if not path.exists():
-            continue
-        with open(path, newline="") as f:
-            row = next(csv.DictReader(f))
-        out[P] = row
+        if path.exists():
+            with open(path, newline="") as f:
+                out[P] = next(csv.DictReader(f))
+    for variant in VARIANT_NAMES:
+        path = RESULTS_DIR / f"run_p{variant}.csv"
+        if path.exists():
+            with open(path, newline="") as f:
+                out[variant] = next(csv.DictReader(f))
     return out
 
 
@@ -86,8 +95,17 @@ def main() -> int:
         print("No results found. Run the pipelines first, then run extract_kpis.py.")
         return 1
 
-    cols = sorted(res.keys())
-    header = ["Metric"] + [f"P{P} ({PIPELINE_NAMES[P]})" for P in cols] + ["Direction"]
+    # Integer pipelines first (1..4), then variants (3_opp, …).
+    int_cols = sorted(k for k in res.keys() if isinstance(k, int))
+    var_cols = sorted(k for k in res.keys() if isinstance(k, str))
+    cols = int_cols + var_cols
+
+    def col_label(k):
+        if isinstance(k, int):
+            return f"P{k} ({PIPELINE_NAMES[k]})"
+        return f"P{k} ({VARIANT_NAMES[k]})"
+
+    header = ["Metric"] + [col_label(k) for k in cols] + ["Direction"]
     widths = [28] + [16] * len(cols) + [14]
 
     def row(vals):
@@ -116,7 +134,10 @@ def main() -> int:
         if not pairs:
             continue
         best = max(pairs, key=lambda x: x[1]) if direction == "higher better" else min(pairs, key=lambda x: x[1])
-        print(f"  {label:28s} -> P{best[0]} ({PIPELINE_NAMES[best[0]]}) = {best[1]:.2f}")
+        best_key = best[0]
+        best_name = (PIPELINE_NAMES[best_key] if isinstance(best_key, int)
+                     else VARIANT_NAMES[best_key])
+        print(f"  {label:28s} -> P{best_key} ({best_name}) = {best[1]:.2f}")
     print()
     return 0
 

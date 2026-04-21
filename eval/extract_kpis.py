@@ -157,15 +157,22 @@ def write_row(row: dict, out_path: Path) -> None:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--pipeline", type=int, choices=[1, 2, 3, 4])
-    p.add_argument("--all", action="store_true")
+    p.add_argument("--pipeline", type=str,
+                   help="Pipeline tag (1, 2, 3, 4, or 3_opp).")
+    p.add_argument("--all", action="store_true",
+                   help="Extract every run_summary.json under eval/runs/.")
     args = p.parse_args()
 
-    targets: list[int]
+    targets: list[str]
     if args.all:
-        targets = [1, 2, 3, 4]
+        targets = sorted(
+            d.name for d in RUNS_DIR.iterdir()
+            if d.is_dir() and (d / "run_summary.json").exists()
+        )
+        # Strip the leading "p" for the label used below.
+        targets = [t[1:] if t.startswith("p") else t for t in targets]
     elif args.pipeline is not None:
-        targets = [args.pipeline]
+        targets = [str(args.pipeline)]
     else:
         p.error("Pass --pipeline N or --all")
         return 2

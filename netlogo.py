@@ -483,6 +483,19 @@ def draw_storage_from_generated_file(universe: "Inventory"):
     for pos in _charging_config.get('charger_positions', []):
         _overlay_chargers.add((int(pos[1]), int(pos[0])))  # (x=col, y=row)
 
+    # Opportunity-only variant: disable the "idle & low-battery → go park at
+    # nearest charger" FMS trigger in robot.py.  Robots still gain drive-by
+    # charge whenever they naturally occupy a charger cell.
+    universe.disable_active_charging = bool(
+        _charging_config.get('disable_active_charging', False)
+    )
+
+    # Pipeline 3 variant flag: when True, skip the blanket
+    # "every value-14 cell is a charger" special case below and rely on
+    # the explicit overlay (charger_positions) instead, so only selected
+    # picker stations get chargers.
+    _p3_selective = bool(_charging_config.get('selective_picker_chargers', False))
+
     for y, row in data.iterrows():
         # Invert Y only to draw
         for x, value in row.items():
@@ -696,7 +709,10 @@ def draw_storage_from_generated_file(universe: "Inventory"):
 
                 # Pipeline 3 only: value-14 cells double as chargers
                 # (co-located with picking stations).
-                if value == 14 and _charging_pipeline == 3:
+                # In selective mode, skip the blanket assignment — the
+                # charger_positions overlay (below) handles which pickers
+                # get chargers, allowing K < 5 pickers to be charged.
+                if value == 14 and _charging_pipeline == 3 and not _p3_selective:
                     obj.shape = 'square 2'
                     obj.color = 45  # Yellow charger symbol
                     universe.charger_cells.add((x, y))

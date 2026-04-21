@@ -27,7 +27,10 @@
       "Bash(PYTHONIOENCODING=utf-8 python eval/run_all.py --horizon 28800 --heartbeat 2000)",
       "Bash(kill %1)",
       "Bash(taskkill //PID 16052 //F)",
-      "Bash(python -c \"import json; d=json.load\\(open\\('eval/runs/p2/run_summary.json'\\)\\); print\\(repr\\(d.get\\('tick_result'\\)\\)\\)\")"
+      "Bash(python -c \"import json; d=json.load\\(open\\('eval/runs/p2/run_summary.json'\\)\\); print\\(repr\\(d.get\\('tick_result'\\)\\)\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 python eval/run_one.py --pipeline 3 --variant opp --horizon 28800 --heartbeat 2000)",
+      "Bash(python -c \"import json; d=json.load\\(open\\('eval/runs/p3_opp/run_summary.json'\\)\\); print\\('tick_result:', repr\\(d.get\\('tick_result'\\)\\)\\)\")",
+      "Bash(python eval/extract_kpis.py --pipeline 3_opp)"
     ]
   }
 }

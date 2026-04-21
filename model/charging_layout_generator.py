@@ -866,13 +866,44 @@ class ChargingLayoutGenerator:
             return matrix
 
         n_place = min(num_chargers, len(station_cells))
-        selected = _evenly_spaced_sample(station_cells, n_place)
+        selected_pickers = _evenly_spaced_sample(station_cells, n_place)
 
-        logger.info(
-            "Picking-station layout: %d charger(s) co-located with "
-            "picking stations from %d available station cell(s): %s",
-            len(selected), len(station_cells), selected,
-        )
+        # Selective mode: only K out of 5 pickers get chargers.  Write the
+        # picker's value-14 entry cells to charger_positions so netlogo.py
+        # registers them via the overlay mechanism (bypassing the blanket
+        # pipeline-3 special case).  A picker at (r, c) is paired with two
+        # value-14 cells immediately to its right — at (r, c+1) and
+        # (r+1, c+1) — so we scan a small box rather than just 4-neighbours.
+        selective = bool(self.config.get("selective_picker_chargers", False))
+        if selective:
+            overlay: List[Cell] = []
+            for r, c in selected_pickers:
+                for dr in (-1, 0, 1, 2):
+                    for dc in (1, 2):
+                        nr, nc = r + dr, c + dc
+                        if (
+                            0 <= nr < self.rows
+                            and 0 <= nc < self.cols
+                            and self.matrix[nr][nc] == 14
+                        ):
+                            overlay.append((int(nr), int(nc)))
+            # Deduplicate while preserving order.
+            seen: set = set()
+            overlay = [cell for cell in overlay
+                       if not (cell in seen or seen.add(cell))]
+            self.config["charger_positions"] = [[r, c] for r, c in overlay]
+            self.config["num_chargers"] = len(overlay)
+            logger.info(
+                "Picking-station layout (selective): %d picker(s) chosen → "
+                "%d value-14 charger cell(s): %s",
+                len(selected_pickers), len(overlay), overlay,
+            )
+        else:
+            logger.info(
+                "Picking-station layout: %d charger(s) co-located with "
+                "picking stations from %d available station cell(s): %s",
+                len(selected_pickers), len(station_cells), selected_pickers,
+            )
         return matrix
 
     def _pipeline_picking_station(self, work: Matrix) -> Matrix:
