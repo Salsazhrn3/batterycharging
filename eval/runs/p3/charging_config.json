@@ -1,1 +1,1 @@
-{"pipeline": 3, "num_chargers": 12}
+{"pipeline": 3, "num_chargers": 12, "disable_active_charging": true}

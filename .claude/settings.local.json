@@ -30,7 +30,17 @@
       "Bash(python -c \"import json; d=json.load\\(open\\('eval/runs/p2/run_summary.json'\\)\\); print\\(repr\\(d.get\\('tick_result'\\)\\)\\)\")",
       "Bash(PYTHONIOENCODING=utf-8 python eval/run_one.py --pipeline 3 --variant opp --horizon 28800 --heartbeat 2000)",
       "Bash(python -c \"import json; d=json.load\\(open\\('eval/runs/p3_opp/run_summary.json'\\)\\); print\\('tick_result:', repr\\(d.get\\('tick_result'\\)\\)\\)\")",
-      "Bash(python eval/extract_kpis.py --pipeline 3_opp)"
+      "Bash(python eval/extract_kpis.py --pipeline 3_opp)",
+      "Bash(PYTHONIOENCODING=utf-8 python eval/run_all.py --horizon 100000 --heartbeat 5000)",
+      "Read(//c/Users/salsa/.claude/projects/c--TA-netlogo-SA-8-new/memory/**)",
+      "Bash(python -c 'import json; d=json.load\\(open\\('\\\\''eval/runs/p__TRACKED_VAR__/run_summary.json'\\\\''\\)\\); tr=d.get\\('\\\\''tick_result'\\\\''\\); print\\(f'\\\\''final_tick={tr.get\\(\"final_tick\"\\) if isinstance\\(tr,dict\\) else \"N/A\"}, type={type\\(tr\\).__name__}'\\\\''\\); print\\(f'\\\\''  tick_result={repr\\(tr\\)[:200]}'\\\\''\\)')",
+      "Bash(PYTHONIOENCODING=utf-8 python eval/run_all.py --horizon 100000 --heartbeat 5000 --pipelines 1)",
+      "Bash(python eval/extract_kpis.py --pipeline 2)",
+      "Bash(python eval/extract_kpis.py --pipeline 3)",
+      "Bash(python eval/extract_kpis.py --pipeline 4)",
+      "Bash(python -c \"from model.robot import Robot; print\\('robot module OK'\\); print\\('BATTERY_LOW_PCT =', Robot.BATTERY_LOW_PCT\\); print\\('BATTERY_CHARGED_PCT =', Robot.BATTERY_CHARGED_PCT\\)\")",
+      "Bash(python -c \"import matplotlib; import pandas; print\\('matplotlib', matplotlib.__version__\\); print\\('pandas', pandas.__version__\\)\")",
+      "Bash(python eval/plot_timeseries.py)"
     ]
   }
 }

@@ -1187,9 +1187,9 @@ class Inventory(Universe):
                     "pod_1": first_queue,
                     "pod_2": second_queue,
                     "pod_3": third_queue,
-                    "occupied_1": first_queue.job.orders if first_queue else None,
-                    "occupied_2": second_queue.job.orders if second_queue else None,
-                    "occupied_3": third_queue.job.orders if third_queue else None,
+                    "occupied_1": first_queue.job.orders if first_queue and first_queue.job else None,
+                    "occupied_2": second_queue.job.orders if second_queue and second_queue.job else None,
+                    "occupied_3": third_queue.job.orders if third_queue and third_queue.job else None,
                     "next_bin_avail": None,
                     "pre_assign": self.preassign_dict.get(order_id, None)
                 })
@@ -1296,9 +1296,9 @@ class Inventory(Universe):
                     "pod_1": first_queue,
                     "pod_2": second_queue,
                     "pod_3": third_queue,
-                    "occupied_1": first_queue.job.orders if first_queue else None,
-                    "occupied_2": second_queue.job.orders if second_queue else None,
-                    "occupied_3": third_queue.job.orders if third_queue else None,
+                    "occupied_1": first_queue.job.orders if first_queue and first_queue.job else None,
+                    "occupied_2": second_queue.job.orders if second_queue and second_queue.job else None,
+                    "occupied_3": third_queue.job.orders if third_queue and third_queue.job else None,
                     "next_bin_avail": None,
                     "pre_assign": self.preassign_dict.get(order_id, None)
                 })

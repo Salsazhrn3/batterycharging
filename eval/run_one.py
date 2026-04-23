@@ -57,18 +57,12 @@ PIPELINE_DEFAULTS = {
     1: {"pipeline": 1, "d": 15},
     2: {"pipeline": 2, "c": 1.0, "alpha": 1.0, "beta": 1.0, "gamma": 1.0,
         "num_chargers": 12},
-    3: {"pipeline": 3, "num_chargers": 12},
+    # P3: all 5 pickers get chargers (10 value-14 cells via the pipeline-3
+    # blanket path in netlogo.py).  Active-charging FMS is disabled so
+    # robots rely solely on drive-by charge during picker dwells —
+    # opportunistic charging as validated by energy-parity analysis.
+    3: {"pipeline": 3, "num_chargers": 12, "disable_active_charging": True},
     4: {"pipeline": 4, "num_chargers": 12},
-}
-
-# Opportunity-charging what-if for pipeline 3: K pickers with chargers
-# (selected analytically via energy parity), active-charging FMS disabled,
-# robots survive the horizon solely on drive-by charge during picker dwells.
-P3_OPPORTUNITY_CONFIG = {
-    "pipeline": 3,
-    "num_chargers": 2,                     # K = 2 pickers (parity K_min=1 + safety)
-    "selective_picker_chargers": True,     # use overlay, not blanket value-14
-    "disable_active_charging": True,       # no FMS park-to-charge trigger
 }
 
 
@@ -93,15 +87,10 @@ def clear_transient_state(workdir: Path) -> None:
             p.unlink()
 
 
-def write_charger_overlay(
-    workdir: Path, pipeline: int, variant: str | None = None
-) -> dict:
+def write_charger_overlay(workdir: Path, pipeline: int) -> dict:
     """Rerun the charging overlay for pipeline P on the EXISTING grid."""
     grid = load_grid(workdir / "generated_pod.csv")
-    if variant == "opp" and pipeline == 3:
-        config = dict(P3_OPPORTUNITY_CONFIG)
-    else:
-        config = dict(PIPELINE_DEFAULTS[pipeline])
+    config = dict(PIPELINE_DEFAULTS[pipeline])
     gen = ChargingLayoutGenerator(grid, config)
     gen.generate()  # sets config["charger_positions"] and ["num_chargers"]
     with open(workdir / "charging_config.json", "w") as f:
@@ -150,17 +139,14 @@ def main() -> int:
                    help="Print heartbeat every N ticks (0 = silent).")
     p.add_argument("--out-root", type=str, default="eval/runs",
                    help="Where to snapshot per-run artifacts.")
-    p.add_argument("--variant", type=str, default=None,
-                   help="Optional variant tag (e.g. 'opp' for P3 opportunity).")
     args = p.parse_args()
 
     workdir = ROOT
-    tag = f"p{args.pipeline}_{args.variant}" if args.variant else f"p{args.pipeline}"
-    dest = ROOT / args.out_root / tag
+    dest = ROOT / args.out_root / f"p{args.pipeline}"
 
-    print(f"[run_one] pipeline={args.pipeline} variant={args.variant} horizon={args.horizon}")
+    print(f"[run_one] pipeline={args.pipeline} horizon={args.horizon}")
     clear_transient_state(workdir)
-    cfg = write_charger_overlay(workdir, args.pipeline, args.variant)
+    cfg = write_charger_overlay(workdir, args.pipeline)
     print(f"[run_one] overlay: {cfg.get('num_chargers')} chargers selected")
 
     t0 = time.time()

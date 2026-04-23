@@ -225,21 +225,12 @@ class Robot(Object):
 
         occupied: dict = getattr(self.universe, 'occupied_chargers', {})
 
-        # ── Guard: limit concurrent charging to half the fleet ────────────
-        total_robots = sum(
-            1 for o in self.universe.get_movable_objects()
-            if o.object_type == "robot"
-        )
-        max_charging = max(1, total_robots // 2)
-        currently_charging = sum(
-            1 for o in self.universe.get_movable_objects()
-            if o.object_type == "robot"
-            and o.current_state == "going_to_charge"
-        )
-        if currently_charging >= max_charging:
-            return False
-
         # ── Pick nearest available charger ────────────────────────────────
+        # Concurrency is naturally capped by the number of charger cells —
+        # one claim per cell (see `occupied`).  A prior half-fleet cap was
+        # removed because at a long horizon (100k+ sim-sec), more than half
+        # the fleet legitimately needs to charge at once; the cap forced
+        # excess robots to queue-while-draining and die at 0 %.
         available = charger_cells - set(occupied.keys())
         if not available:
             return False
@@ -418,7 +409,8 @@ class Robot(Object):
             'returning_pod': 2,
             'taking_pod': 1,
             'going_to_charge': 0,
-            'idle': 0
+            'idle': 0,
+            'dead': 0,
         }
         is_replenish = False
         if self.job is not None:
@@ -1055,6 +1047,27 @@ class Robot(Object):
     def move(self):
         self.changeColorByState()
 
+        # ── Dead-robot handling ──────────────────────────────────────────
+        # If battery is fully drained, park the robot in place: release any
+        # claimed charger, zero the motion, and skip movementPlan so it does
+        # not try to pathfind or block other robots' rerouting logic.  The
+        # 70 % trigger should prevent this in practice; this is a safety net.
+        if self.battery_level_j <= 0.0 and self.current_state != "dead":
+            self._release_charger()
+            self.velocity = 0
+            self.acceleration = 0
+            self.route_stop_points = []
+            self.current_state = "dead"
+            self.universe.landscape.setObject(
+                self.robotName(), self.pos_x, self.pos_y,
+                self.velocity, self.acceleration, self.heading,
+                self.current_state, self.load_mass,
+            )
+            return
+        if self.current_state == "dead":
+            # Already parked; do nothing (and do not drain further).
+            return
+
         # ── Base operational drain — every tick, skip while on a charger ──
         # (Charger powers the robot's electronics while plugged in.)
         if not self.is_charging:
@@ -1259,10 +1272,22 @@ class Robot(Object):
             print(f"[ERROR] other ongoing robots")
             for o in self.warehouse.get_movable_objects():
                 if isinstance(o, Robot):
-                    print(f" >>> robot {o.robotID} job {o.job.job_id} pod {o.job.pod.pod_id}")
-                    if o.job.pod.pod_id == self.job.pod.pod_id:
+                    job_id = o.job.job_id if o.job else None
+                    pod_id = o.job.pod.pod_id if (o.job and o.job.pod) else None
+                    print(f" >>> robot {o.robotID} job {job_id} pod {pod_id}")
+                    if o.job and o.job.pod and o.job.pod.pod_id == self.job.pod.pod_id:
                         print("[CRITICAL] double job for this pod")
-            raise e
+            # Soft-fail: release the assignment so the FMS can retry next tick
+            # rather than crashing the entire simulation when one robot fails
+            # to find a route (e.g., a dead robot blocking the only aisle).
+            print(f"[WARN] soft-fail: releasing job {self.job.job_id} from robot {self.robotID()}")
+            self.warehouse.job_queue.append(self.job)
+            self.job = None
+            self.current_state = "idle"
+            self.route_stop_points = []
+            self.velocity = 0
+            self.acceleration = 0
+            return
         self.current_state = "taking_pod"
         upsert_pod_travel(
             self.job.my_id,
@@ -1303,6 +1328,13 @@ class Robot(Object):
         else:
             # print(f"[DEBUG] universe.zoning == False")
             node_routes = graph.dijkstra(start, end, nodes_to_avoid) # This one is baseline
+        if node_routes is None:
+            # No path exists (e.g., a dead robot blocking the only aisle, or
+            # the destination cell isn't in the routing graph).  Surface this
+            # as a clean exception so the caller can soft-fail / retry.
+            raise ValueError(
+                f"no route from {start} to {end} (avoid={nodes_to_avoid})"
+            )
         try:
             self.setPath(self._transformRouteToList(node_routes))
         except Exception as e:
