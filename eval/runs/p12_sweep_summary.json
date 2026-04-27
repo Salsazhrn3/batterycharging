@@ -1,0 +1,77 @@
+{
+  "pipelines": [
+    1,
+    2
+  ],
+  "nums": [
+    5,
+    10,
+    15,
+    20,
+    25
+  ],
+  "horizon": 20000,
+  "runs": [
+    {
+      "pipeline": 1,
+      "num": 5,
+      "rc": 0,
+      "elapsed_min": 56.6
+    },
+    {
+      "pipeline": 1,
+      "num": 10,
+      "rc": 0,
+      "elapsed_min": 49.2
+    },
+    {
+      "pipeline": 1,
+      "num": 15,
+      "rc": 0,
+      "elapsed_min": 46.6
+    },
+    {
+      "pipeline": 1,
+      "num": 20,
+      "rc": 0,
+      "elapsed_min": 46.6
+    },
+    {
+      "pipeline": 1,
+      "num": 25,
+      "rc": 0,
+      "elapsed_min": 48.0
+    },
+    {
+      "pipeline": 2,
+      "num": 5,
+      "rc": 0,
+      "elapsed_min": 54.7
+    },
+    {
+      "pipeline": 2,
+      "num": 10,
+      "rc": 0,
+      "elapsed_min": 49.4
+    },
+    {
+      "pipeline": 2,
+      "num": 15,
+      "rc": 0,
+      "elapsed_min": 121.2
+    },
+    {
+      "pipeline": 2,
+      "num": 20,
+      "rc": 0,
+      "elapsed_min": 48.3
+    },
+    {
+      "pipeline": 2,
+      "num": 25,
+      "rc": 0,
+      "elapsed_min": 47.2
+    }
+  ],
+  "total_elapsed_min": 567.9
+}

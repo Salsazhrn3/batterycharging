@@ -69,12 +69,16 @@ def load_order_finished(run_dir: Path) -> tuple[np.ndarray, np.ndarray]:
 
 
 def rolling_throughput(completes: np.ndarray, window_s: float,
-                       step_s: float) -> tuple[np.ndarray, np.ndarray]:
-    """Return (t_grid, orders_per_sim_hour) over a sliding window."""
+                       step_s: float, horizon_s: float
+                       ) -> tuple[np.ndarray, np.ndarray]:
+    """Return (t_grid, orders_per_sim_hour) over a sliding window.
+
+    Grid spans [0, horizon_s] so every pipeline's line covers the same
+    x-axis range — points past the last completion naturally drop to 0.
+    """
+    t_grid = np.arange(0.0, horizon_s + step_s, step_s)
     if completes.size == 0:
-        return np.array([]), np.array([])
-    t_end = float(completes[-1])
-    t_grid = np.arange(0.0, t_end + step_s, step_s)
+        return t_grid, np.zeros_like(t_grid)
     thr = np.zeros_like(t_grid)
     for i, t in enumerate(t_grid):
         lo, hi = t - window_s, t
@@ -84,12 +88,12 @@ def rolling_throughput(completes: np.ndarray, window_s: float,
 
 
 def rolling_mean(x: np.ndarray, y: np.ndarray, window_s: float,
-                 step_s: float) -> tuple[np.ndarray, np.ndarray]:
-    """Return (t_grid, mean_y_in_window)."""
+                 step_s: float, horizon_s: float
+                 ) -> tuple[np.ndarray, np.ndarray]:
+    """Return (t_grid, mean_y_in_window) — grid spans [0, horizon_s]."""
+    t_grid = np.arange(0.0, horizon_s + step_s, step_s)
     if x.size == 0:
-        return np.array([]), np.array([])
-    t_end = float(x[-1])
-    t_grid = np.arange(0.0, t_end + step_s, step_s)
+        return t_grid, np.full_like(t_grid, np.nan, dtype=float)
     out = np.full_like(t_grid, np.nan, dtype=float)
     for i, t in enumerate(t_grid):
         mask = (x > t - window_s) & (x <= t)
@@ -106,7 +110,10 @@ def main() -> int:
                     help="Step between rolling-window samples (sim-seconds).")
     ap.add_argument("--pipelines", type=str, default="1,2,3,4",
                     help="Comma-separated pipeline IDs to include.")
+    ap.add_argument("--horizon", type=int, default=100000,
+                    help="Sim horizon (sec) — sets x-axis range for all plots.")
     args = ap.parse_args()
+    horizon_s = float(args.horizon)
 
     pipelines = [int(x) for x in args.pipelines.split(",") if x.strip()]
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -127,14 +134,20 @@ def main() -> int:
         return 1
 
     # ── Figure 1: Cumulative orders completed vs sim-time ───────────────
+    # Extend each line flat past its last completion to horizon_s so the
+    # reader can see "no further completions occurred" rather than thinking
+    # the data is missing.
     plt.figure(figsize=(10, 5))
     for P, (completes, _) in data.items():
         cum = np.arange(1, completes.size + 1)
-        plt.plot(completes, cum, label=PIPELINE_NAMES[P],
+        x = np.concatenate([completes, [horizon_s]])
+        y = np.concatenate([cum, [cum[-1]]])
+        plt.plot(x, y, label=PIPELINE_NAMES[P],
                  color=PIPELINE_COLORS[P], lw=1.8)
+    plt.xlim(0, horizon_s)
     plt.xlabel("Sim-time (seconds)")
     plt.ylabel("Cumulative orders completed")
-    plt.title("Cumulative orders completed vs sim-time (100k-sec horizon)")
+    plt.title(f"Cumulative orders completed vs sim-time ({int(horizon_s):,}-sec horizon)")
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
@@ -145,9 +158,10 @@ def main() -> int:
     # ── Figure 2: Rolling throughput (orders/sim-hr) ───────────────────
     plt.figure(figsize=(10, 5))
     for P, (completes, _) in data.items():
-        t, thr = rolling_throughput(completes, args.window, args.step)
+        t, thr = rolling_throughput(completes, args.window, args.step, horizon_s)
         plt.plot(t, thr, label=PIPELINE_NAMES[P],
                  color=PIPELINE_COLORS[P], lw=1.6)
+    plt.xlim(0, horizon_s)
     plt.xlabel("Sim-time (seconds)")
     plt.ylabel(f"Orders / sim-hour (rolling {args.window}s)")
     plt.title(f"Rolling throughput ({args.window}s window)")
@@ -161,9 +175,10 @@ def main() -> int:
     # ── Figure 3: Cycle time (rolling mean) ────────────────────────────
     plt.figure(figsize=(10, 5))
     for P, (completes, cycles) in data.items():
-        t, mean_c = rolling_mean(completes, cycles, args.window, args.step)
+        t, mean_c = rolling_mean(completes, cycles, args.window, args.step, horizon_s)
         plt.plot(t, mean_c, label=PIPELINE_NAMES[P],
                  color=PIPELINE_COLORS[P], lw=1.6)
+    plt.xlim(0, horizon_s)
     plt.xlabel("Sim-time (seconds)")
     plt.ylabel(f"Cycle time mean (s, rolling {args.window}s)")
     plt.title(f"Order cycle time vs sim-time ({args.window}s window)")
@@ -179,9 +194,10 @@ def main() -> int:
     for P, (completes, cycles) in data.items():
         plt.scatter(completes, cycles, s=4, alpha=0.15,
                     color=PIPELINE_COLORS[P])
-        t, mean_c = rolling_mean(completes, cycles, args.window, args.step)
+        t, mean_c = rolling_mean(completes, cycles, args.window, args.step, horizon_s)
         plt.plot(t, mean_c, label=PIPELINE_NAMES[P],
                  color=PIPELINE_COLORS[P], lw=1.8)
+    plt.xlim(0, horizon_s)
     plt.xlabel("Sim-time order completed (seconds)")
     plt.ylabel("Cycle time (s)")
     plt.title("Per-order cycle time (dots) and rolling mean (lines)")

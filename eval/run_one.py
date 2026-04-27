@@ -57,11 +57,36 @@ PIPELINE_DEFAULTS = {
     1: {"pipeline": 1, "d": 15},
     2: {"pipeline": 2, "c": 1.0, "alpha": 1.0, "beta": 1.0, "gamma": 1.0,
         "num_chargers": 12},
-    # P3: all 5 pickers get chargers (10 value-14 cells via the pipeline-3
-    # blanket path in netlogo.py).  Active-charging FMS is disabled so
-    # robots rely solely on drive-by charge during picker dwells —
-    # opportunistic charging as validated by energy-parity analysis.
-    3: {"pipeline": 3, "num_chargers": 12, "disable_active_charging": True},
+    # P3: 12 chargers distributed across ALL 5 picker stations, targeting
+    # the two highest-dwell cells of each station's short_path:
+    #   - Processing spot: path[-1] = (col=2, picker_row) — adjacent to the
+    #     staff cell (value 11), where the robot holds the pod while the
+    #     picker picks items.
+    #   - Queue-back: path[0] = (col=4, deepest picker_row offset) — where
+    #     robots stack up when the station is busy.
+    # The two busiest stations (picker-1 at row 1 and picker-4 at row 19,
+    # carrying 33 % and 23 % of traffic in the prior run) each get a 3rd
+    # charger at the mid-queue cell (col=3) for extra capture while queued.
+    # Stored as [row, col]; netlogo.py converts to (x=col, y=row).
+    # disable_active_charging keeps P3 opportunistic (no FMS dispatch).
+    3: {
+        "pipeline": 3,
+        "num_chargers": 12,
+        "disable_active_charging": True,
+        "selective_picker_chargers": True,
+        "charger_positions": [
+            # picker-1 (row 1) — 3 chargers: processing + queue-back + mid-queue
+            [1, 2], [3, 4], [3, 3],
+            # picker-2 (row 7) — 2 chargers: processing + queue-back
+            [7, 2], [9, 4],
+            # picker-3 (row 13) — 2 chargers: processing + queue-back
+            [13, 2], [15, 4],
+            # picker-4 (row 19) — 3 chargers: processing + queue-back + mid-queue
+            [19, 2], [21, 4], [21, 3],
+            # picker-5 (row 25) — 2 chargers: processing + queue-back
+            [25, 2], [27, 4],
+        ],
+    },
     4: {"pipeline": 4, "num_chargers": 12},
 }
 
@@ -87,10 +112,20 @@ def clear_transient_state(workdir: Path) -> None:
             p.unlink()
 
 
-def write_charger_overlay(workdir: Path, pipeline: int) -> dict:
-    """Rerun the charging overlay for pipeline P on the EXISTING grid."""
+def write_charger_overlay(workdir: Path, pipeline: int,
+                           override_path: Path | None = None) -> dict:
+    """Rerun the charging overlay for pipeline P on the EXISTING grid.
+
+    If ``override_path`` is given and exists, its JSON contents replace
+    the PIPELINE_DEFAULTS entry — used by the charger-count sweep to
+    vary num_chargers / charger_positions across runs.
+    """
     grid = load_grid(workdir / "generated_pod.csv")
-    config = dict(PIPELINE_DEFAULTS[pipeline])
+    if override_path and override_path.exists():
+        with open(override_path) as f:
+            config = json.load(f)
+    else:
+        config = dict(PIPELINE_DEFAULTS[pipeline])
     gen = ChargingLayoutGenerator(grid, config)
     gen.generate()  # sets config["charger_positions"] and ["num_chargers"]
     with open(workdir / "charging_config.json", "w") as f:
@@ -139,6 +174,9 @@ def main() -> int:
                    help="Print heartbeat every N ticks (0 = silent).")
     p.add_argument("--out-root", type=str, default="eval/runs",
                    help="Where to snapshot per-run artifacts.")
+    p.add_argument("--config-override", type=str, default=None,
+                   help="Path to a JSON file whose contents replace "
+                        "PIPELINE_DEFAULTS[pipeline] for this run.")
     args = p.parse_args()
 
     workdir = ROOT
@@ -146,7 +184,8 @@ def main() -> int:
 
     print(f"[run_one] pipeline={args.pipeline} horizon={args.horizon}")
     clear_transient_state(workdir)
-    cfg = write_charger_overlay(workdir, args.pipeline)
+    override_path = Path(args.config_override) if args.config_override else None
+    cfg = write_charger_overlay(workdir, args.pipeline, override_path=override_path)
     print(f"[run_one] overlay: {cfg.get('num_chargers')} chargers selected")
 
     t0 = time.time()

@@ -92,9 +92,15 @@ class Robot(Object):
     BASE_DRAIN_RATE_PER_S: float = 90.0 * _BATTERY_SPEED_FACTOR    # real: 90 J/s
     CHARGE_POWER_W: float = 397.6 * _BATTERY_SPEED_FACTOR          # real: 397.6 W
 
-    # ── Charging policy thresholds (Table 5 — Charging Rule Detail) ───────
-    BATTERY_LOW_PCT: float = 70.0               # Go charge when below this %
-    BATTERY_CHARGED_PCT: float = 80.0           # Stop charging when above this %
+    # ── Charging policy thresholds (Bischoff et al. 2025, Table 4) ────────
+    # Best non-RL heuristic from the paper: Fixed-threshold 20/90 + Interrupt
+    # at 50% (mean service time 628 s — best baseline with Interrupt enabled).
+    # P3 keeps these too but is unaffected since disable_active_charging=True
+    # blocks the FMS dispatch and the Interrupt path runs only in
+    # going_to_charge state, which P3 robots never enter.
+    BATTERY_LOW_PCT: float = 20.0               # Go charge when below this %
+    BATTERY_CHARGED_PCT: float = 90.0           # Stop charging when above this %
+    BATTERY_INTERRUPT_PCT: float = 50.0         # Interrupt halts charging above this
     
     
     
@@ -520,10 +526,31 @@ class Robot(Object):
         return self.job.is_being_processed() and self.close_enough(
             station.coordinate, 0.1)
 
+    def _should_interrupt_charging(self) -> bool:
+        """Bischoff et al. 2025 Interrupt heuristic.
+
+        While charging, if there are pending jobs AND no other AMR is free
+        to take them, kick this AMR off the charger as soon as its battery
+        is above ``BATTERY_INTERRUPT_PCT``. Keeps the fleet responsive to
+        load when chargers would otherwise hold robots until ``CHARGED_PCT``.
+        """
+        if self.battery_pct <= self.BATTERY_INTERRUPT_PCT:
+            return False
+        if not len(getattr(self.universe, 'job_queue', [])):
+            return False
+        for o in self.universe.get_movable_objects():
+            if (getattr(o, 'object_type', None) == 'robot'
+                    and o is not self
+                    and o.current_state == 'idle'
+                    and getattr(o, 'battery_level_j', 0) > 0):
+                return False
+        return True
+
     def movementPlan(self):
-        # ── Charging policy: arrived at charger → wait until battery ≥ 80 % ──
+        # ── Charging policy: arrived at charger → wait until battery ≥ 90 % ──
         if self.current_state == "going_to_charge" and not self.route_stop_points:
-            if self.battery_pct >= self.BATTERY_CHARGED_PCT:
+            if (self.battery_pct >= self.BATTERY_CHARGED_PCT
+                    or self._should_interrupt_charging()):
                 self._release_charger()
                 self.current_state = "idle"
             # Stay put and charge (handled by _apply_drive_by_charging every tick)
@@ -1081,6 +1108,27 @@ class Robot(Object):
                 and (self.job is None or self.job.is_finished)
                 and self.battery_pct < self.BATTERY_LOW_PCT
                 and not getattr(self.universe, "disable_active_charging", False)):
+            self._start_charging_trip()
+
+        # ── Preemptive charging: abort taking-pod when battery drops below 20% ──
+        # The idle-only trigger above rarely fires under continuous load because
+        # the FMS reassigns a robot the instant it becomes idle. This preempts
+        # only in the *taking_pod* state — before the pod is picked up — so we
+        # never orphan a pod in an aisle. In the other working states the robot
+        # finishes its current sub-mission, transitions to idle, and the low-
+        # battery filter at inventory.py:150 skips it from new assignments so
+        # the idle trigger above can fire on the next tick.
+        elif (self.current_state == "taking_pod"
+                and self.battery_pct < self.BATTERY_LOW_PCT
+                and not self.is_charging
+                and not getattr(self.universe, "disable_active_charging", False)):
+            if self.job is not None and not getattr(self.job, "is_finished", False):
+                self.warehouse.job_queue.append(self.job)
+            self.job = None
+            self.route_stop_points = []
+            self.velocity = 0
+            self.acceleration = 0
+            self.current_state = "idle"
             self._start_charging_trip()
 
         # ── Stuck timeout: if going_to_charge robot is blocked too long,

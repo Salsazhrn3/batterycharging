@@ -875,7 +875,18 @@ class ChargingLayoutGenerator:
         # value-14 cells immediately to its right — at (r, c+1) and
         # (r+1, c+1) — so we scan a small box rather than just 4-neighbours.
         selective = bool(self.config.get("selective_picker_chargers", False))
-        if selective:
+        # If the caller already provided an explicit charger_positions list
+        # (e.g. the per-station gate+non-gate layout in run_one.py), keep it
+        # verbatim and skip auto-computation.
+        explicit = self.config.get("charger_positions") or []
+        if selective and explicit:
+            self.config["num_chargers"] = len(explicit)
+            logger.info(
+                "Picking-station layout (selective, explicit): "
+                "%d charger cell(s) supplied by caller: %s",
+                len(explicit), explicit,
+            )
+        elif selective:
             overlay: List[Cell] = []
             for r, c in selected_pickers:
                 for dr in (-1, 0, 1, 2):
@@ -979,28 +990,35 @@ class ChargingLayoutGenerator:
         *num_chargers* exceeds the number of perimeter cells, every
         perimeter cell receives a charger.
 
+        Selected positions are stored in
+        ``self.config["charger_positions"]`` as a list of [row, col] pairs
+        (same convention as P1/P2/P3).  The grid itself is not mutated —
+        netlogo.py reads positions from the config overlay.
+
         Parameters
         ----------
         matrix : Matrix
-            Working copy (mutated in place).
+            Working copy (returned unmodified).
         num_chargers : int
 
         Returns
         -------
-        The modified matrix.
+        The unmodified matrix.
         """
         perimeter = self.find_perimeter_cells(matrix)
         if not perimeter:
             logger.warning(
                 "Pipeline 4: no navigable cells found on the top or bottom rows."
             )
+            self.config["charger_positions"] = []
+            self.config["num_chargers"] = 0
             return matrix
 
         n_place = min(num_chargers, len(perimeter))
         selected = _evenly_spaced_sample(perimeter, n_place)
 
-        for r, c in selected:
-            matrix[r][c] = CHARGER
+        self.config["charger_positions"] = [[int(r), int(c)] for r, c in selected]
+        self.config["num_chargers"] = len(selected)
 
         logger.info(
             "Perimeter layout: %d charger(s) spread across %d perimeter cell(s).",
