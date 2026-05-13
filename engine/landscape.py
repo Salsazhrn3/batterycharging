@@ -42,21 +42,32 @@ class Landscape:
     def setObject(self, label, x, y, speed, acceleration, heading, state, load_mass):
         if label not in self._objects:
             return self._setObjectNew(label, x, y, speed, acceleration, heading, state, load_mass)
-        
+
         old_x = round(self._objects[label]['x'])
         old_y = round(self._objects[label]['y'])
-        
-        # check if x or y has changed
-        if round(x) != old_x or round(y) != old_y:
-            # remove from old position
-            to_iter = self._map[old_x][old_y] 
-            for index, e in enumerate(to_iter):
-                if e['label'] == label:
-                    del to_iter[index]
-                    break
+        nx, ny = round(x), round(y)
+        rows = len(self._map)
+        cols = len(self._map[0]) if rows else 0
 
-            # add to new position
-            self._map[round(x)][round(y)].append(self._objects[label])
+        # check if x or y has changed
+        if nx != old_x or ny != old_y:
+            # remove from old position (skip if old was already out-of-bounds)
+            if 0 <= old_x < rows and 0 <= old_y < cols:
+                to_iter = self._map[old_x][old_y]
+                for index, e in enumerate(to_iter):
+                    if e['label'] == label:
+                        del to_iter[index]
+                        break
+
+            # add to new position; skip if out-of-bounds (upstream routing
+            # occasionally produces invalid coordinates — survive instead of
+            # crashing the simulation, log so it's visible in run output).
+            if 0 <= nx < rows and 0 <= ny < cols:
+                self._map[nx][ny].append(self._objects[label])
+            else:
+                print(f"[landscape] WARN: out-of-bounds setObject "
+                      f"label={label} x={x} y={y} (rounded {nx},{ny}) "
+                      f"map={rows}x{cols}; skipping map update")
 
         movement = 'vertical'
         if heading == 270 or heading == 90:
@@ -83,7 +94,7 @@ class Landscape:
         while i < x+check:
             j = y+radius
             while j > y-check:
-                if i >= 0 and j >= 0:
+                if 0 <= i < len(self._map) and 0 <= j < len(self._map[0]):
                     if i != x or j != y:
                         points_to_check.append([i, j])
                 j -= 1

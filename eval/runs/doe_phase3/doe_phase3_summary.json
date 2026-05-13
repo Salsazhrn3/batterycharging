@@ -1,0 +1,185 @@
+{
+  "horizon": 20000,
+  "num_chargers_nominal": 12,
+  "candidates": {
+    "robust": {
+      "tau_low": 18,
+      "tau_full": 60,
+      "interrupt": 50
+    },
+    "peak": {
+      "tau_low": 25,
+      "tau_full": 90,
+      "interrupt": 0
+    }
+  },
+  "L9": [
+    [
+      1,
+      1,
+      1,
+      1
+    ],
+    [
+      1,
+      2,
+      2,
+      2
+    ],
+    [
+      1,
+      3,
+      3,
+      3
+    ],
+    [
+      2,
+      1,
+      2,
+      3
+    ],
+    [
+      2,
+      2,
+      3,
+      1
+    ],
+    [
+      2,
+      3,
+      1,
+      2
+    ],
+    [
+      3,
+      1,
+      3,
+      2
+    ],
+    [
+      3,
+      2,
+      1,
+      3
+    ],
+    [
+      3,
+      3,
+      2,
+      1
+    ]
+  ],
+  "factor_levels": {
+    "demand": [
+      0.7,
+      1.0,
+      1.3
+    ],
+    "robots": [
+      18,
+      20,
+      22
+    ],
+    "faults": [
+      0,
+      1,
+      2
+    ],
+    "init_batt": [
+      0.5,
+      0.7,
+      1.0
+    ]
+  },
+  "runs": [
+    {
+      "id": "robust_run01",
+      "skipped": true
+    },
+    {
+      "id": "robust_run02",
+      "rc": 0,
+      "elapsed_min": 53.7
+    },
+    {
+      "id": "robust_run03",
+      "rc": 0,
+      "elapsed_min": 59.0
+    },
+    {
+      "id": "robust_run04",
+      "rc": 0,
+      "elapsed_min": 52.7
+    },
+    {
+      "id": "robust_run05",
+      "rc": 0,
+      "elapsed_min": 54.5
+    },
+    {
+      "id": "robust_run06",
+      "rc": 0,
+      "elapsed_min": 52.6
+    },
+    {
+      "id": "robust_run07",
+      "rc": 0,
+      "elapsed_min": 50.2
+    },
+    {
+      "id": "robust_run08",
+      "rc": 0,
+      "elapsed_min": 56.4
+    },
+    {
+      "id": "robust_run09",
+      "skipped": true
+    },
+    {
+      "id": "peak_run01",
+      "rc": 0,
+      "elapsed_min": 71.4
+    },
+    {
+      "id": "peak_run02",
+      "rc": 0,
+      "elapsed_min": 64.8
+    },
+    {
+      "id": "peak_run03",
+      "rc": 0,
+      "elapsed_min": 51.8
+    },
+    {
+      "id": "peak_run04",
+      "rc": 0,
+      "elapsed_min": 47.3
+    },
+    {
+      "id": "peak_run05",
+      "rc": 0,
+      "elapsed_min": 53.2
+    },
+    {
+      "id": "peak_run06",
+      "rc": 0,
+      "elapsed_min": 50.5
+    },
+    {
+      "id": "peak_run07",
+      "rc": 0,
+      "elapsed_min": 47.7
+    },
+    {
+      "id": "peak_run08",
+      "rc": 0,
+      "elapsed_min": 49.8
+    },
+    {
+      "id": "peak_run09",
+      "rc": 0,
+      "elapsed_min": 45.3
+    }
+  ],
+  "total_elapsed_min": 860.9
+}

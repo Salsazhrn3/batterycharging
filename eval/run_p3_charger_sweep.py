@@ -10,11 +10,16 @@ per-robot state.
 
 Priority tiers (each adds 5 cells, 1 per picker station, in station order
 1..5 at rows 1/7/13/19/25):
-  T1 (processing):  (col=2, picker_row)       — path[-1]  cells
-  T2 (queue-back):  (col=4, picker_row+2)     — path[0]   cells
-  T3 (mid-queue):   (col=3, picker_row+2)     — path[1]   cells
-  T4 (middle-gate): (col=2, picker_row+1)     — path[3]   cells
-  T5 (corner):      (col=2, picker_row+2)     — path[2]   cells
+  T1 (processing):     (col=2, picker_row)       — path[-1]  cells
+  T2 (queue-back):     (col=4, picker_row+2)     — path[0]   cells
+  T3 (mid-queue):      (col=3, picker_row+2)     — path[1]   cells
+  T4 (middle-gate):    (col=2, picker_row+1)     — path[3]   cells
+  T5 (corner):         (col=2, picker_row+2)     — path[2]   cells
+  T6 (entry-deep):     (col=4, picker_row)       — transit at picker row
+  T7 (entry-mid):      (col=3, picker_row)       — transit at picker row
+  T8 (gate-mid):       (col=3, picker_row+1)     — between gate and queue
+  T9 (gate-deep):      (col=4, picker_row+1)     — between gate and queue
+  T10 (corner+1):      (col=2, picker_row+3)     — extend col-2 cluster down
 
 Results go to eval/runs/p3_sweep/n{NUM}/ (per-num snapshots) and
 eval/runs/p3_sweep/sweep_summary.json (aggregated across all runs).
@@ -40,9 +45,14 @@ TIERS = [
     [[r + 2, 3] for r in PICKER_ROWS],  # T3 mid-queue
     [[r + 1, 2] for r in PICKER_ROWS],  # T4 middle-gate
     [[r + 2, 2] for r in PICKER_ROWS],  # T5 corner
+    [[r,     4] for r in PICKER_ROWS],  # T6 entry-deep
+    [[r,     3] for r in PICKER_ROWS],  # T7 entry-mid
+    [[r + 1, 3] for r in PICKER_ROWS],  # T8 gate-mid
+    [[r + 1, 4] for r in PICKER_ROWS],  # T9 gate-deep
+    [[r + 3, 2] for r in PICKER_ROWS],  # T10 corner+1
 ]
 
-NUM_CHARGERS_SWEEP = [5, 10, 15, 20, 25]
+NUM_CHARGERS_SWEEP = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 
 
 def build_layout(num: int) -> list[list[int]]:

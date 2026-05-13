@@ -101,6 +101,7 @@ class Robot(Object):
     BATTERY_LOW_PCT: float = 20.0               # Go charge when below this %
     BATTERY_CHARGED_PCT: float = 90.0           # Stop charging when above this %
     BATTERY_INTERRUPT_PCT: float = 50.0         # Interrupt halts charging above this
+    INITIAL_BATTERY_FRAC: float = 1.0           # Robots start with this fraction of full capacity (Phase 3 noise factor)
     
     
     
@@ -124,8 +125,8 @@ class Robot(Object):
         self.return_fix = False
         self.return_nearest = True
 
-        # Battery state — starts fully charged.
-        self.battery_level_j: float = self.BATTERY_CAPACITY_J
+        # Battery state — starts at INITIAL_BATTERY_FRAC of full capacity (default 1.0).
+        self.battery_level_j: float = self.BATTERY_CAPACITY_J * self.INITIAL_BATTERY_FRAC
         # Set to True on any tick the robot is physically over a charger cell.
         self.is_charging: bool = False
         # The charger cell this robot has claimed (or None).
@@ -1064,7 +1065,26 @@ class Robot(Object):
                                           self.heading, self.current_state, self.load_mass)
 
     def update_motion_parameters(self, current_coord, next_destination_coordinate):
-        # Adjust robot's acceleration based on proximity to the next intersection_coordinate
+        # Adjust robot's acceleration based on proximity to the next intersection_coordinate.
+        #
+        # Heading-alignment guard: the original implementation accelerates
+        # toward an Euclidean-distance target without checking whether the
+        # robot's current heading actually points at the destination. If the
+        # heading is misaligned (e.g. heading=90 east but destination is west)
+        # the robot accelerates AWAY from the destination, which can cause it
+        # to walk off the grid indefinitely. Detect that case and decelerate
+        # to a stop instead of accelerating; the route logic on the next tick
+        # then has a chance to re-orient.
+        dx = next_destination_coordinate.x - current_coord.x
+        dy = next_destination_coordinate.y - current_coord.y
+        if abs(dx) >= abs(dy):
+            required_heading = 90 if dx > 0 else (270 if dx < 0 else self.heading)
+        else:
+            required_heading = 0 if dy > 0 else (180 if dy < 0 else self.heading)
+        if self.heading != required_heading:
+            self.acceleration = -1
+            return
+
         self.acceleration = 1
         deceleration_buffer = 0.5
         distance_to_stop = self._calculateTwoPoint(current_coord, next_destination_coordinate)

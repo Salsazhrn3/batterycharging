@@ -22,7 +22,7 @@
 
 \begin{document}
 
-\title{Strategic Placement Algorithms for Charging Stations in Robotic Mobile Fulfillment Systems}
+\title{Joint Placement-Policy Optimisation for Charging Stations in Robotic Mobile Fulfillment Systems: A Constrained Response Surface and Taguchi Robustness Approach}
 
 \author{\IEEEauthorblockN{Salsa Zahrani}
 \IEEEauthorblockA{\textit{Engineering Management} \\
@@ -33,19 +33,104 @@ Bandung, Indonesia}
 \maketitle
 
 \begin{abstract}
-The placement of charging stations in a Robotic Mobile Fulfillment System (RMFS) critically impacts Fleet Management System (FMS) efficiency and pathfinding stability. If charging infrastructure is placed haphazardly, Automated Guided Vehicles (AGVs) can cause severe deadlocks when executing battery recovery trips. This paper details four distinct charging layout generation algorithms --- Set Cover Approximation, Affinity Propagation, Picking-Station Opportunity Charging, and Perimeter Wall Strategy --- and evaluates them in a 20-robot RMFS simulation over a long horizon of $\SI{100000}{\second}$ ($\approx\SI{27.8}{\hour}$). We show empirically that placement strategy creates a productivity-survival tradeoff: cluster-based placement maximises fleet survivorship, dwell-aligned placement maximises throughput, and traffic-heatmap and perimeter strategies underperform on both axes. A complementary charger-budget sweep ($|C| \in \{5, 10, 15, 20, 25\}$ at $\SI{20000}{\second}$) further demonstrates that placement quality dominates budget: dwell-aligned placement captures 10--25$\times$ more energy than alternatives at every budget tested.
+The placement of charging stations in a Robotic Mobile Fulfillment System (RMFS) is a strategic capital decision; the FMS charging policy is an operational decision. The two are typically optimised in isolation. We argue that they interact, and that joint optimisation reveals failure modes invisible to single-axis approaches. We present a phased Design of Experiments framework: Phase~1 benchmarks four placement algorithms (Set Cover, Affinity Propagation, Picker-Station Opportunistic, and Perimeter) at fixed default policy across long-horizon ($\SI{100000}{\second}$) and budget-sweep settings; Phase~2 fits a face-centred Central Composite Design over policy thresholds at the surviving placement, employing Constrained Response Surface Methodology (Myers, Montgomery \& Anderson-Cook, 2016) to handle a discovered deadlock manifold; Phase~3 evaluates two candidate policies under the surviving placement through a Taguchi $L_9$ orthogonal array over four operational noise factors. We find that placement quality dominates budget by an order of magnitude, that the joint policy surface contains thin deadlock zones invisible at the design's centre, and that the Phase~2 constrained-RSM optimum is also the robust optimum (deadlock rate 2/9 vs 4/9, orders signal-to-noise ratio +5.79\,dB) --- establishing that the most actionable operational lever for warehouse managers is start-of-shift battery state rather than demand-load or fleet-attrition variation.
 \end{abstract}
 
 \begin{IEEEkeywords}
-RMFS, charging station placement, fleet management, set cover, affinity propagation, opportunity charging
+RMFS, charging station placement, fleet management, set cover, affinity propagation, opportunity charging, design of experiments, response surface methodology, Taguchi robust design
 \end{IEEEkeywords}
 
 \section{Introduction}
-In an RMFS environment, AGVs navigate a grid-based warehouse to transport storage pods between storage zones and picking stations. The strategic placement of charging stations is modeled using a discrete grid matrix $M$ of size $R \times C$, where each cell $M_{r,c}$ is assigned an integer representing its topographical type (e.g., traversable aisle, pod slot, intersection, or workstation).
+\label{sec:intro}
 
-The FMS governs the battery cycles of the fleet. When an AGV's state of charge (SoC) drops to a critical threshold (e.g., 20\%), it must drop out of the active dispatch pool and navigate to a charger. To prevent multi-agent pathfinding (MAPF) failures, charging stations must be placed without overwriting critical routing graph nodes, such as directional rails and intersections. This paper formulates four algorithmic pipelines to determine the optimal set of charging coordinates while preserving the directed routing graph, and empirically benchmarks them in a long-horizon simulation against a centralised FMS that we extend with a preemptive low-battery trigger to prevent fleet death under continuous order load.
+The Robotic Mobile Fulfillment System (RMFS), commercially exemplified by Amazon's Kiva robots \cite{wurman2008}, is a parts-to-picker order-fulfillment paradigm in which Automated Guided Vehicles (AGVs) ferry storage pods between storage zones and picker stations. RMFSs are a dominant category in modern e-commerce warehousing because they decouple storage location assignment from picker workflow and scale gracefully in dynamic-demand regimes \cite{boysen2019,lamballais2017}. Their performance, however, is fundamentally bounded by the energy economy of the AGV fleet: every robot must periodically interrupt productive work to recharge, and every recharging trip imposes both an energy and a routing cost on the warehouse.
+
+In this regime, the strategic placement of charging stations is modelled using a discrete grid matrix $M$ of size $R \times C$, where each cell $M_{r,c}$ is assigned an integer representing its topographical type (traversable aisle, pod slot, intersection, picker station, replenishment station, or non-traversable boundary). The Fleet Management System (FMS) governs the battery cycles of the fleet through a charging policy: when an AGV's state of charge (SoC) drops to a critical lower threshold (typically $20\,\%$), it must drop out of the active dispatch pool and navigate to a charger; once at the charger, it remains there until SoC reaches an upper threshold (typically $90\,\%$) or until preempted by a higher-priority job through an interrupt mechanism \cite{bischoff2025}.
+
+\subsection{The single-axis problem}
+The literature has, until recently, treated the placement and policy decisions as independent. Placement studies \cite{kundu2023,baras2023} optimise a layout under a fixed default policy; policy studies \cite{bischoff2025,deng2020,lin2023} optimise charging thresholds and durations under a fixed default placement. Each line of work answers a partial question, but neither addresses the empirically natural question facing a warehouse manager: \emph{what is the joint optimum of (placement, policy), and how robust is that optimum to operational perturbations such as demand spikes, fleet attrition, and infrastructure faults?}
+
+\subsection{The case for joint optimisation}
+Treating the two decisions independently can produce demonstrably suboptimal recommendations because \emph{the optimal value of any policy parameter depends on the placement, and vice versa}. The trigger threshold $\tau_\text{low}$ encodes ``how much battery do I need to reach a charger from here?''; this distance is a function of charger density and dispersion. The charge-to target $\tau_\text{full}$ encodes ``how long can I afford to occupy this cell?''; this is a function of how transit-critical the cell is. Charger-station selection rules encode contention behaviour, which depends on cluster density. Every policy parameter is implicitly evaluating a geometric assumption that the placement controls. The joint optimum is therefore generally not the composition of the two single-axis optima.
+
+\subsection{Contributions}
+This paper makes the following contributions:
+\begin{enumerate}
+  \item We formulate the placement-policy joint optimisation as a phased Design of Experiments (DoE) problem with three nested phases: factorial screening (Phase~1), constrained Response Surface Methodology (Phase~2), and Taguchi robust parameter design (Phase~3).
+  \item We propose four placement pipelines (Set Cover Approximation, Affinity Propagation, Picker-Station Opportunity Charging, Perimeter Wall Strategy) and benchmark them empirically in a 20-robot RMFS simulator over a long horizon ($\SI{100000}{\second}$, $\approx\SI{27.8}{\hour}$).
+  \item We discover and characterise two empirical \emph{deadlock manifolds} --- thin regions of the joint (placement, policy) space in which the simulator's order-completion process freezes despite all robots remaining alive. These manifolds are invisible to single-axis optimisation and represent a previously undocumented failure mode in RMFS operation.
+  \item We treat the discovered manifolds as infeasibility constraints in a Constrained Response Surface formulation \cite{myers2016}, fit a quadratic surface on the feasible region, and extract a constrained optimum at $(\tau_\text{low}=18\,\%, \tau_\text{full}=60\,\%)$ with the Bischoff interrupt enabled at $50\,\%$.
+  \item We evaluate this constrained optimum against the higher-replenish Phase~1 best corner (interrupt off) under a Taguchi $L_9$ orthogonal array over four operational noise factors (demand load, fleet size, charger faults, initial battery state) and demonstrate that the constrained-RSM optimum is simultaneously the better mean performer and the more robust performer (deadlock rate $2/9$ vs $4/9$, orders signal-to-noise ratio $+5.79\,\text{dB}$).
+  \item We identify start-of-shift battery state as the dominant noise factor in the operational envelope --- a managerially-actionable insight that single-axis policy optimisation cannot reach.
+\end{enumerate}
+
+\subsection{Outline}
+Section~\ref{sec:related} reviews the literature on AGV charging strategies, charger placement, and the application of Design of Experiments to warehouse simulation studies. Section~\ref{sec:placement} formalises the four placement pipelines under evaluation. Section~\ref{sec:experiments} describes the simulator, the FMS extensions, and the response variables we extract. Section~\ref{sec:results} reports the Phase~1 results: the long-horizon cross-pipeline comparison and the budget sweep. Section~\ref{sec:phase2} develops the Phase~2 framework and presents the constrained RSM analysis. Section~\ref{sec:phase3} presents the Phase~3 Taguchi robustness analysis. Section~\ref{sec:discussion} interprets the empirical findings against the established theoretical framework. Section~\ref{sec:limitations} documents the methodological limitations. Section~\ref{sec:conclusion} closes with the joint-optimisation recommendation and future-work agenda. Figure~\ref{fig:method_flow} visualises the three-phase methodology and its information flow.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.95\textwidth]{methodology_flow.png}
+  \caption{Three-phase methodology for joint placement-policy optimisation.
+  Phase~1 screens 4 placements crossed with a $2^3$ policy factorial; the
+  surviving placement is carried into Phase~2 face-centred CCD with the
+  empirical deadlock manifold $\mathcal{D}_{P3}$ excluded as an infeasibility
+  constraint per Myers, Montgomery \& Anderson-Cook \cite{myers2016}, \S 7.5.
+  The constrained-RSM optimum then becomes one of two candidate policies
+  evaluated in Phase~3 against a Taguchi $L_9(3^4)$ orthogonal array over
+  four operational noise factors. The framework yields a CapEx-OpEx-procedural
+  recommendation suitable for industrial deployment.}
+  \label{fig:method_flow}
+\end{figure*}
+
+\section{Related Work}
+\label{sec:related}
+
+The work in this paper sits at the intersection of three literatures: charger placement, charging-strategy optimisation, and the application of Design of Experiments methodology to discrete-event simulation studies of automated warehouses. We review each in turn and articulate the gap that motivates our framework.
+
+\subsection{Charger placement for AMR/AGV systems}
+
+Charger placement has been studied primarily as a static, geometric problem. Kundu and Saha \cite{kundu2023} formulate the placement of charging stations for mobile robots as a coverage problem and provide approximation algorithms with worst-case reachability guarantees, applying greedy set-cover techniques to ensure every traversable cell is within a bounded number of hops from a charger. Baras et al. \cite{baras2023} take a data-driven approach in modern automated warehouses, applying Affinity Propagation clustering on traffic heatmaps to identify high-traffic exemplar cells as charger candidates. Both works fix the operational charging policy at industry-default parameters and report their findings under a single policy condition; neither examines whether a different policy might re-rank the placements.
+
+Earlier industrial work on AGV systems \cite{vis2006,dekoster2007} identified that charging-related downtime is a significant performance bottleneck in warehouses with continuous operation, but framed the placement decision as a one-shot capital-expenditure (CapEx) calculation independent of operational dispatch rules. Wang et al. \cite{wang2014} examined power-consumption characteristics of lithium-ion batteries that constrain charging-station design choices but did not extend the analysis to the spatial layout.
+
+\subsection{Charging-strategy optimisation}
+
+The charging strategy --- when, where, and for how long an AGV charges --- has received more recent attention than placement, especially in the context of large-scale block-stacking warehouses. Following the taxonomy of Wang, Zhang and Peh \cite{wang2014} (also adopted by \cite{bischoff2025}), the strategy decomposes into three sub-problems: charging decision (when to charge), charging-station selection (which charger), and charging duration (how long).
+
+Heuristic approaches dominate practice. Fixed-threshold policies \cite{shaukat2022,colling2019} parameterise the lower trigger and upper target as $\tau_\text{low}$ and $\tau_\text{full}$ respectively; values such as $20\,\%$ and $90\,\%$ are widely used as defaults grounded in incident-prevention considerations. Opportunity charging --- the strategy of charging during natural idle dwell rather than via dedicated trips --- has been advocated when the placement co-locates chargers with high-dwell zones \cite{ebben2001}. The interrupt heuristic of Bischoff et al. \cite{bischoff2025}, which forces an AGV to leave a charger if pending jobs exist and no other AGV is free, mitigates the productivity cost of long charging cycles and is the formal mechanism we adopt as a binary policy factor.
+
+Exact optimisation has been applied to small instances. Meyer et al. \cite{meyer2024} formulate AMR routing with electric constraints as a mixed-integer linear program (MILP) and develop a branch-price-and-cut algorithm for instances up to 144 tasks; Singh et al. \cite{singh2022} present a matheuristic for instances larger than 22 tasks. Both works observe that exact methods are infeasible for the dynamic, online variants of the warehouse problem characteristic of e-commerce fulfillment.
+
+Reinforcement learning has emerged recently as a meta-heuristic. Lin et al. \cite{lin2023} use feature-based SARSA to learn charging duration; Deng et al. \cite{deng2020} and Mu et al. \cite{mu2022} use deep RL to learn population-level charging schedules; Singh et al. \cite{singh2024} apply Noisy Dueling Double DQN to dispatch heterogeneous AGVs with battery constraints. Most recently, Bischoff, Rinciog and Meyer \cite{bischoff2025} systematically study the impact of reward function design and action space on RL-learned charging policies, finding that shaped rewards combined with a binary charge-or-no-charge action space produce the most stable learning. All these works fix the charger placement at the warehouse's pre-existing layout and treat policy as the only decision variable.
+
+\subsection{Joint optimisation in warehouse design}
+
+Joint optimisation of multiple warehouse decisions is theoretically well-motivated \cite{pfrommer2020,boysen2019} but operationally under-explored. The autonomous block stacking warehouse problem (ABSWP) of \cite{pfrommer2020} explicitly identifies the interdependence between storage location assignment, unit load selection, and vehicle dispatching as a key research challenge, but battery management is treated as an afterthought in most subsequent simulation studies on this benchmark \cite{pfrommer2022}. Lamballais et al. \cite{lamballais2017} provide queueing-theoretic performance models for RMFS that decompose the system into parts but do not consider charging dynamics. To our knowledge, the present work is the first to systematically jointly optimise placement and policy in an RMFS simulator and to characterise the interaction structure with formal DoE methodology.
+
+\subsection{Design of Experiments in simulation studies}
+
+Design of Experiments (DoE) is the canonical statistical framework for systematic exploration of a multifactor decision space \cite{montgomery2017,box2005}. A factorial design is the simplest DoE: with $k$ binary factors it samples all $2^k$ corner points, allowing main effects and all interactions to be estimated. Fractional factorial designs \cite{montgomery2017} sample a subset of corners using a defining relation that aliases higher-order interactions with main effects, enabling screening of many factors with reduced experimental cost.
+
+Response Surface Methodology (RSM) \cite{box1951,myers2016,khuri1996} extends DoE to continuous factors and quadratic response models. The Central Composite Design (CCD), introduced by Box and Wilson \cite{box1951}, is the foundational design for fitting a quadratic surface in $k$ continuous factors using $2^k$ corner points, $2k$ axial points, and $n_c$ centre-point replicates. The face-centred variant ($\alpha = 1$) sets the axial points at the design face midpoints, avoiding factor settings outside the original $[-1, +1]$ range, which is appropriate when factor levels are constrained by physical or operational bounds. Constrained RSM \cite{myers2016}, \S 7.5, addresses the case where some response-surface region is operationally infeasible: the surface is fitted only on feasible observations, and the optimum is sought subject to a geometric or empirically-defined feasibility constraint.
+
+Taguchi's robust parameter design \cite{taguchi1986,phadke1989,ross1996} reframes the optimisation problem in the presence of \emph{noise factors} --- variables affecting the response that the operator cannot control in deployment. Taguchi separates factors into \emph{control factors} (set by the operator) and \emph{noise factors} (perturbed in the field), and uses orthogonal arrays such as $L_9(3^4)$ to sample noise-factor combinations efficiently. Performance is summarised by a signal-to-noise (S/N) ratio whose formula depends on the response objective: larger-the-better $\eta_\text{LB} = -10\log_{10}(\frac{1}{n}\sum y_i^{-2})$, smaller-the-better $\eta_\text{SB} = -10\log_{10}(\frac{1}{n}\sum y_i^2)$, and nominal-the-best $\eta_\text{NB} = 10\log_{10}(\bar{y}^2/s^2)$ \cite{taguchi1986,phadke1989}. The robust optimum is the control-factor setting that maximises the appropriate S/N ratio across the noise array.
+
+DoE has been widely applied to discrete-event simulation in operations management \cite{kuhnle2019}, but its use in joint placement-policy optimisation of charging infrastructure is novel.
+
+\subsection{Research gap and positioning}
+
+Three observations emerge from the review:
+
+\begin{enumerate}
+  \item Placement and policy have been studied as separate problems, with placement studies fixing default policies and policy studies fixing default placements.
+  \item The interaction between the two decisions has been argued theoretically \cite{pfrommer2020} but not characterised empirically with formal DoE methodology.
+  \item Operational robustness of any joint optimum --- under demand variation, charger faults, fleet attrition, and start-of-shift conditions --- has not been measured for charging-infrastructure decisions.
+\end{enumerate}
+
+This paper closes these gaps by employing the standard DoE-RSM-Taguchi pipeline (Phase~1 screening, Phase~2 constrained RSM, Phase~3 Taguchi robustness) on the joint placement-policy optimisation problem, framed as an Engineering Management decision-support exercise yielding a CapEx-OpEx decision matrix.
 
 \section{Proposed Placement Algorithms}
+\label{sec:placement}
 
 \subsection{Pipeline 1: Set Cover Approximation}
 The first pipeline ensures worst-case reachability by guaranteeing that every physically navigable cell in the warehouse is within a maximum hop distance $d$ of at least one charger \cite{kundu2023}. To prevent AGVs from blocking active aisles while charging, the candidate locations for chargers are strictly limited to empty floor spaces and active pod positions ($M_c \in \{0, 1\}$).
@@ -84,13 +169,13 @@ $\text{Set\_Cover\_Approx}(U, Cover)$: An approximation algorithm to solve the s
 \end{algorithm}
 
 \subsection{Pipeline 2: Affinity Propagation}
-The second pipeline utilizes a data-driven clustering approach based on historical or simulated traffic density, defined by a traffic matrix $T$ \cite{baras2023}. Unlike Set Cover, Affinity Propagation (AP) dynamically determines the optimal number of clusters based on traffic hotspots. To prevent routing deadlocks, candidate cells are strictly limited to empty floor spaces ($M_c = 0$), avoiding pod slots entirely.
+The second pipeline uses a data-driven clustering approach based on historical or simulated traffic density, defined by a traffic matrix $T$ \cite{baras2023}. Unlike Set Cover, Affinity Propagation (AP) dynamically determines the optimal number of clusters based on traffic hotspots. To prevent routing deadlocks, candidate cells are strictly limited to empty floor spaces ($M_c = 0$), avoiding pod slots entirely.
 
-The AP algorithm divides the initial area into multiple sub-areas based on a similarity matrix $S$. The diagonal elements (preferences) dictate the likelihood of a cell becoming a cluster exemplar. To ensure high-traffic areas attract cluster centers, the self-similarity is defined as:
+The AP algorithm divides the initial area into multiple sub-areas based on a similarity matrix $S$. The diagonal elements (preferences) dictate the likelihood of a cell becoming a cluster exemplar. To ensure high-traffic areas attract cluster centres, the self-similarity is defined as:
 \begin{equation}
     S_{i,i} = +\log(c + T_i)
 \end{equation}
-where $c$ is a small positive regularization constant. Once the clusters are established, a placement score is calculated for every cell within the cluster to select the optimal local charging node.
+where $c$ is a small positive regularisation constant. Once the clusters are established, a placement score is calculated for every cell within the cluster to select the optimal local charging node.
 
 \begin{algorithm}[htbp]
 \caption{AP\_TRAFFIC\_CLUSTERING: Traffic Density Clustering}
@@ -98,7 +183,7 @@ where $c$ is a small positive regularization constant. Once the clusters are est
 \alginput{
 $M$: Topographical grid matrix representing the warehouse.\\
 $T$: Traffic density matrix corresponding to $M$.\\
-$c$: Regularization constant for self-similarity preference.
+$c$: Regularisation constant for self-similarity preference.
 }
 \algoutput{
 $K$: Set of spatial clusters grouping the candidate cells.
@@ -132,7 +217,7 @@ The scoring function evaluates traffic desirability, spatial safety, and proximi
 \begin{equation}
     \text{Score}(c) = \alpha \cdot TD(c) - \beta \cdot P(c) - \gamma \cdot D(c)
 \end{equation}
-where $TD(c) = 1 - (T_c - \mu_{cluster})^2$ creates an inverted bell curve rewarding cells near the cluster's mean traffic. $P(c)$ is a binary penalty keeping chargers out of immediate pod retrieval lanes, and $D(c)$ actively penalizes distance from the cluster's peak traffic hotspot, ensuring AGVs do not deadhead deep into storage aisles to recharge.
+where $TD(c) = 1 - (T_c - \mu_{cluster})^2$ creates an inverted bell curve rewarding cells near the cluster's mean traffic. $P(c)$ is a binary penalty keeping chargers out of immediate pod retrieval lanes, and $D(c)$ actively penalises distance from the cluster's peak traffic hotspot, ensuring AGVs do not deadhead deep into storage aisles to recharge.
 
 \begin{algorithm}[htbp]
 \caption{AP\_HOTSPOT\_PLACEMENT: Scoring and Selection}
@@ -207,7 +292,7 @@ $\text{EvenlySpacedSample}(P, N)$: Returns $N$ items from list $P$ evenly distri
 \end{algorithm}
 
 \subsection{Pipeline 4: Perimeter Wall Strategy}
-The final pipeline serves as an isolation control layout, heavily penalizing charger-induced congestion by distributing chargers along the perimeter walls. This keeps the main traffic arteries completely clear. The algorithm geometrically scans the grid to identify the vertical aisle adjacent to the replenishment stations, strictly avoiding cells that share a row with a station entrance to prevent queue blockage.
+The final pipeline serves as an isolation control layout, heavily penalising charger-induced congestion by distributing chargers along the perimeter walls. This keeps the main traffic arteries completely clear. The algorithm geometrically scans the grid to identify the vertical aisle adjacent to the replenishment stations, strictly avoiding cells that share a row with a station entrance to prevent queue blockage.
 
 \begin{algorithm}[htbp]
 \caption{PERIMETER\_ISOLATION: Wall Strategy}
@@ -255,7 +340,7 @@ The fleet consists of $N_r = 20$ AGVs operating on a \SI{30}{\cell} $\times$ \SI
 \subsection{Robot and Energy Model}
 Robot motion energy follows the two-phase kinematic model presented by Zakka~et~al.~\cite{zakka2025}: acceleration and deceleration phases are integrated using the robot's payload state (loaded or unloaded), and steady-state cruising consumes a velocity-dependent power variable. Pod handling activities (lifting and lowering) contribute a fixed energetic cost per event. In addition to kinetic motion, a constant base-drain term models the consumption of on-board electronics and is applied whenever the robot is not actively charging.
 
-Battery dynamics employ the fixed-threshold charging strategy observed in the work of Bischoff~et~al.~\cite{bischoff2025}. A robot begins its initial operational sequence at full battery capacity, and the FMS attempts to route it to a designated charging station when the state of charge crosses a defined critical low threshold. Numerical parameters governing the physical simulation are summarized in Table~\ref{tab:params}.
+Battery dynamics employ the fixed-threshold charging strategy observed in the work of Bischoff~et~al.~\cite{bischoff2025}. A robot begins its initial operational sequence at full battery capacity, and the FMS attempts to route it to a designated charging station when the state of charge crosses a defined critical low threshold. Numerical parameters governing the physical simulation are summarised in Table~\ref{tab:params}.
 
 \begin{table}[t]
   \centering
@@ -280,7 +365,7 @@ Battery dynamics employ the fixed-threshold charging strategy observed in the wo
 \end{table}
 
 \subsection{Placement Pipelines (Treatments)}
-We compare four distinct charger placement pipelines. Each pipeline is implemented as an offline computational procedure that analyzes a traffic heatmap $H:\mathcal{G}\to\mathbb{R}_{\geq 0}$ derived from a preliminary pilot run, outputting a set $C$ of strategic charger cells:
+We compare four distinct charger placement pipelines. Each pipeline is implemented as an offline computational procedure that analyses a traffic heatmap $H:\mathcal{G}\to\mathbb{R}_{\geq 0}$ derived from a preliminary pilot run, outputting a set $C$ of strategic charger cells:
 
 \begin{itemize}
   \item \textbf{P1 -- Set Cover:} A greedy set-cover approximation algorithm operating on the traffic heatmap with coverage radius $\rho$. Candidate cells encompass both empty floor zones and pod storage cells.
@@ -299,41 +384,41 @@ To resolve this, we introduce a \emph{preemptive} threshold trigger integrated d
 
 \subsection{Experimental Design}
 \label{sec:design}
-The primary experiment is structured as a one-way treatment analysis comparing the four placement pipelines at an extended horizon of $T = \SI{100000}{\second}$ under controlled initial conditions. A secondary optimization experiment sweeps the charger count $|C| \in \{5, 10, 15, 20, 25\}$ for the three quantitatively-comparable pipelines (P1, P2, P3) at $T = \SI{20000}{\second}$ to quantify the marginal value of localized infrastructure expansion and to disentangle placement quality from placement budget. A preliminary $30{,}000$-tick smoke test is also utilized to validate the preemptive FMS mechanism prior to the long-horizon batch. Each configuration is launched headlessly via automated batch scripts, and the resulting performance artifacts are parsed into a unified dataset for comparative Key Performance Indicator (KPI) evaluation.
+The primary experiment is structured as a one-way treatment analysis comparing the four placement pipelines at an extended horizon of $T = \SI{100000}{\second}$ under controlled initial conditions. A secondary optimisation experiment sweeps the charger count $|C| \in \{5, 10, 15, 20, 25\}$ for the three quantitatively-comparable pipelines (P1, P2, P3) at $T = \SI{20000}{\second}$ to quantify the marginal value of localised infrastructure expansion and to disentangle placement quality from placement budget. A preliminary $30{,}000$-tick smoke test is also used to validate the preemptive FMS mechanism prior to the long-horizon batch. Each configuration is launched headlessly via automated batch scripts, and the resulting performance artifacts are parsed into a unified dataset for comparative Key Performance Indicator (KPI) evaluation.
 
 \subsection{Extracted Metrics}
 \label{sec:metrics}
 
-For each simulation run, we extract several KPIs, categorized by the core operational dynamics they assess.
+For each simulation run, we extract several KPIs, categorised by the core operational dynamics they assess.
 
 \paragraph{Throughput Analysis ---}\textit{Does the warehouse maintain continuous productivity?}
 \begin{itemize}
-  \item \textbf{Total Orders Completed:} The absolute volume of fulfillment tasks successfully finalized within the simulation horizon. Layouts that induce rapid battery mortality will yield substantially depressed completion rates.
-  \item \textbf{Hourly Throughput:} The normalized fulfillment rate relative to simulated operational hours, facilitating standardized cross-pipeline performance comparisons.
+  \item \textbf{Total Orders Completed:} The absolute volume of fulfillment tasks successfully finalised within the simulation horizon. Layouts that induce rapid battery mortality will yield substantially depressed completion rates.
+  \item \textbf{Hourly Throughput:} The normalised fulfillment rate relative to simulated operational hours, facilitating standardised cross-pipeline performance comparisons.
 \end{itemize}
 
 \paragraph{Latency and Wait Times ---}\textit{How efficiently are orders processed from queue to completion?}
 \begin{itemize}
-  \item \textbf{Mean, Median, and 95th Percentile Cycle Time:} The temporal duration from order initialization to final delivery. While the mean and median capture normative baseline latency, the 95th percentile highlights extreme tail behaviors induced by spatial bottlenecks and charger congestion.
+  \item \textbf{Mean, Median, and 95th Percentile Cycle Time:} The temporal duration from order initialisation to final delivery. While the mean and median capture normative baseline latency, the 95th percentile highlights extreme tail behaviours induced by spatial bottlenecks and charger congestion.
 \end{itemize}
 
-\paragraph{Energetic Efficiency ---}\textit{How optimally is kinetic and auxiliary power utilized?}
+\paragraph{Energetic Efficiency ---}\textit{How optimally is kinetic and auxiliary power used?}
 \begin{itemize}
   \item \textbf{Total Energy Consumption:} The cumulative energy expenditure across the simulator, encapsulating both kinematic motion and continuous base-drain requirements.
-  \item \textbf{Energy per Order:} The primary efficiency metric. A highly optimized charging layout that reduces non-productive transit distances to charging stations will significantly lower the energy expended per successfully completed order.
+  \item \textbf{Energy per Order:} The primary efficiency metric. A highly optimised charging layout that reduces non-productive transit distances to charging stations will significantly lower the energy expended per successfully completed order.
 \end{itemize}
 
 \paragraph{Routing Congestion ---}\textit{Does the charging placement generate pathfinding obstructions?}
 \begin{itemize}
   \item \textbf{Yield Frequency (Stop-and-Go):} The total occurrences of involuntary deceleration and halting resulting from mutual-exclusion routing conflicts between multiple AGVs.
-  \item \textbf{Cumulative Heading Changes:} The aggregate sum of rotational maneuvers. Analyzed in conjunction with yield frequency, these metrics isolate congestion driven by charger crowding versus intrinsic topological constraints in the aisle grid.
+  \item \textbf{Cumulative Heading Changes:} The aggregate sum of rotational manoeuvres. Analysed in conjunction with yield frequency, these metrics isolate congestion driven by charger crowding versus intrinsic topological constraints in the aisle grid.
 \end{itemize}
 
 \paragraph{Fleet Viability (End-of-Run State) ---}\textit{Can the fleet sustain 24/7 continuous operations?}
 \begin{itemize}
-  \item \textbf{Mean and Minimum State of Charge (SoC):} The final battery distribution across the 20-robot fleet. An end-of-run mean stabilizing well above $\tau_\text{low}$ indicates an infrastructure layout capable of indefinite operational sustainability.
+  \item \textbf{Mean and Minimum State of Charge (SoC):} The final battery distribution across the 20-robot fleet. An end-of-run mean stabilising well above $\tau_\text{low}$ indicates an infrastructure layout capable of indefinite operational sustainability.
   \item \textbf{Active Charging and En-Route Counts:} A real-time snapshot of the battery recovery loop. A healthy infrastructure configuration exhibits cyclic, continuous charging activity, whereas a collapsed system returns null values.
-  \item \textbf{Depleted Fleet Count:} The volume of AGVs ending the simulation with an SoC near zero. This serves as the paramount survivorship metric; layouts are distinctly categorized by whether they sustain total fleet survival ($0$ depleted) or induce total system collapse ($N_r$ depleted).
+  \item \textbf{Depleted Fleet Count:} The volume of AGVs ending the simulation with an SoC near zero. This serves as the paramount survivorship metric; layouts are distinctly categorised by whether they sustain total fleet survival ($0$ depleted) or induce total system collapse ($N_r$ depleted).
 \end{itemize}
 
 \paragraph{Energy Parity (Derived) ---}\textit{Does the infrastructure adequately replenish systemic consumption?}
@@ -346,7 +431,7 @@ For each simulation run, we extract several KPIs, categorized by the core operat
 \end{itemize}
 
 \subsection{Implementation Environment}
-All simulation experiments are executed computationally on a dedicated workstation utilizing Python 3.10 equipped with the NumPy, SciPy, Matplotlib, and NetworkX libraries for advanced matrix manipulation and graph-theoretic pathfinding. Processing relies purely on CPU threads with no GPU acceleration required. An isolated stress test comprising $100{,}000$ simulation ticks completes in approximately \SI{5}{\hour} of wall-clock time, averaging a computational velocity of $5$ ticks per second.
+All simulation experiments are executed computationally on a dedicated workstation using Python 3.10 equipped with the NumPy, SciPy, Matplotlib, and NetworkX libraries for advanced matrix manipulation and graph-theoretic pathfinding. Processing relies purely on CPU threads with no GPU acceleration required. An isolated stress test comprising $100{,}000$ simulation ticks completes in approximately \SI{5}{\hour} of wall-clock time, averaging a computational velocity of $5$ ticks per second.
 
 \section{Results}
 \label{sec:results}
@@ -362,20 +447,20 @@ We report two complementary experiments. Section~\ref{sec:r100k} fixes the charg
 
 \begin{table}[t]
   \centering
-  \caption{Cross-pipeline comparison at $T = \SI{100000}{\second}$, $|C| = 12$, $N_r = 20$. \emph{Replenish} is gained / consumed energy, the long-horizon viability metric. \emph{Cons.} and \emph{Gain.} are total fleet energy consumed and replenished, in megajoules.}
+  \caption{Cross-pipeline comparison at $T = \SI{100000}{\second}$, $|C| = 12$, $N_r = 20$. \emph{Replenish} is gained / consumed energy, the long-horizon viability metric. \emph{Cons.} and \emph{Gain.} are total fleet energy consumed and replenished, in megajoules. \emph{$\eta_E$} is the cost-efficiency metric: consumed energy divided by completed orders, in kilojoules per order. P3 leads on $\eta_E$ by $\sim$17\,\% because its surviving subset of the fleet continues producing orders against the fixed base-drain overhead, dragging the per-order denominator down.}
   \label{tab:p100k}
   \small
   \setlength{\tabcolsep}{4pt}
-  \begin{tabular}{lcccccc}
+  \begin{tabular}{lccccccc}
     \toprule
     Pipeline & Dead & \makecell{Mean\\batt.\,\%} & Orders &
-    \makecell{Replenish\\\%} & \makecell{Cons.\\(MJ)} &
-    \makecell{Gain.\\(MJ)} \\
+    \makecell{Replen.\\\%} & \makecell{Cons.\\(MJ)} &
+    \makecell{Gain.\\(MJ)} & \makecell{$\eta_E$\\(kJ/ord)} \\
     \midrule
-    P1 Set Cover         &  9 &  7.5 & 2450 & 48.8 & 234.16 & 114.26 \\
-    P2 Affinity Prop.    &  \textbf{8} & 14.2 & 2508 & \textbf{53.0} & 236.40 & 125.23 \\
-    P3 Picker-Tier       & 17 &  3.0 & \textbf{3102} & 49.3 & 248.11 & 122.41 \\
-    P4 Perimeter         & 17 & 12.1 & 2395 & 51.4 & 234.45 & 120.54 \\
+    P1 Set Cover         &  9 &  7.5 & 2450 & 48.8 & 234.16 & 114.26 & 95.6 \\
+    P2 Affinity Prop.    &  \textbf{8} & 14.2 & 2508 & \textbf{53.0} & 236.40 & 125.23 & 94.3 \\
+    P3 Picker-Tier       & 17 &  3.0 & \textbf{3102} & 49.3 & 248.11 & 122.41 & \textbf{80.0} \\
+    P4 Perimeter         & 17 & 12.1 & 2395 & 51.4 & 234.45 & 120.54 & 97.9 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -433,13 +518,13 @@ Three observations follow directly from Table~\ref{tab:p100k} and Fig.~\ref{fig:
 \subsection{Charger-budget sweep ($T = 20{,}000$\,s, three pipelines)}
 \label{sec:sweep}
 
-\paragraph{Motivation.} Section~\ref{sec:r100k} compares placements at a fixed budget. To distinguish the \emph{placement} effect from a \emph{budget} effect, we sweep $|C| \in \{5, 10, 15, 20, 25\}$ for each of P1, P2, P3 at the shorter $T = \SI{20000}{\second}$ horizon. The shorter horizon is chosen so that batteries do not approach the 20\,\% preemption threshold during the run, isolating pure-placement performance from the preemption mechanism's contribution.
+\paragraph{Motivation.} Section~\ref{sec:r100k} compares placements at a fixed budget. To distinguish the \emph{placement} effect from a \emph{budget} effect, we sweep the charger budget $|C|$ at the shorter $T = \SI{20000}{\second}$ horizon. The shorter horizon is chosen so that batteries do not approach the 20\,\% preemption threshold during the run, isolating pure-placement performance from the preemption mechanism's contribution. We initially sweep $|C| \in \{5, 10, 15, 20, 25\}$ for each of P1, P2, P3. Since P1 and P2 plateau early (replenish below 3\,\% across all five budgets), we then extend the P3 sweep to $|C| \in \{30, 35, 40, 45, 50\}$ to characterise the saturation behaviour of the picker-tier heuristic. Extending P3 beyond 25 cells required adding tiers T6--T10 to the heuristic to populate additional picker-corridor cells (col-3 and col-4 picker-row entries, gate-mid, gate-deep, and corner+1 cells); the algorithm definition is otherwise unchanged.
 
 \paragraph{Results.} Table~\ref{tab:sweep} and Fig.~\ref{fig:combined_sweep} report replenish ratio and order counts across budgets and pipelines.
 
 \begin{table}[t]
   \centering
-  \caption{Charger-budget sweep at $T = \SI{20000}{\second}$, $N_r = 20$. P3 captures 10--25$\times$ more energy than P1 or P2 at every budget; P1 and P2 are essentially flat across budgets.}
+  \caption{Charger-budget sweep at $T = \SI{20000}{\second}$, $N_r = 20$. P1 and P2 are essentially flat across budgets; P3 climbs from 23\,\% to a ceiling of 60\,\% at $|C| = 50$. The marginal return per added charger drops sharply beyond $|C| = 35$, indicating saturation of the picker-tier heuristic.}
   \label{tab:sweep}
   \small
   \setlength{\tabcolsep}{5pt}
@@ -449,11 +534,16 @@ Three observations follow directly from Table~\ref{tab:p100k} and Fig.~\ref{fig:
     \cmidrule(lr){2-4} \cmidrule(lr){5-7}
     $|C|$ & P1 & P2 & P3 & P1 & P2 & P3 \\
     \midrule
-     5 & 2.1 & 0.4 & \textbf{23.1} & 1758 & 1757 & 1758 \\
-    10 & 2.6 & 0.8 & \textbf{26.1} & 1734 & 1766 & 1761 \\
-    15 & 1.8 & 1.1 & \textbf{28.6} & 1766 & 1761 & 1758 \\
-    20 & 2.2 & 1.7 & \textbf{43.9} & 1746 & 1762 & 1426 \\
-    25 & 2.3 & 1.6 & \textbf{41.3} & 1748 & 1745 & 1746 \\
+     5 & 2.1 & 0.4 & 23.4 & 1758 & 1757 & 1766 \\
+    10 & 2.6 & 0.8 & 26.3 & 1734 & 1766 & 1748 \\
+    15 & 1.8 & 1.1 & 28.5 & 1766 & 1761 & 1765 \\
+    20 & 2.2 & 1.7 & 35.6 & 1746 & 1762 & 1754 \\
+    25 & 2.3 & 1.6 & 41.7 & 1748 & 1745 & 1757 \\
+    30 & --- & --- & 50.5 & ---  & ---  & 1729 \\
+    35 & --- & --- & 55.9 & ---  & ---  & 1742 \\
+    40 & --- & --- & 57.5 & ---  & ---  & 1756 \\
+    45 & --- & --- & 59.7 & ---  & ---  & 1769 \\
+    50 & --- & --- & \textbf{60.2} & ---  & ---  & 1741 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -461,14 +551,15 @@ Three observations follow directly from Table~\ref{tab:p100k} and Fig.~\ref{fig:
 \begin{figure}[t]
   \centering
   \includegraphics[width=\columnwidth]{combined_sweep.png}
-  \caption{Charger-budget sweep at $T = \SI{20000}{\second}$. \emph{Left:} replenish ratio (energy gained / consumed) versus charger count. P1 and P2 remain below 3\,\% across the entire range; P3 rises from 23\,\% at $|C| = 5$ to 41--44\,\% at $|C| = 20$--$25$. \emph{Right:} orders completed; throughput is bounded by the picker-station capacity at this horizon and does not separate the pipelines, except for a transient dip at P3, $|C| = 20$ caused by short-lived charger congestion.}
+  \caption{Charger-budget sweep at $T = \SI{20000}{\second}$. \emph{Left:} replenish ratio (energy gained / consumed) versus charger count. P1 and P2 remain below 3\,\% across the entire range; P3 rises monotonically from 23\,\% at $|C| = 5$ to a saturation ceiling of $60.2\,\%$ at $|C| = 50$, with marginal returns dropping sharply beyond $|C| = 35$. \emph{Right:} orders completed; throughput is bounded by the picker-station capacity at this horizon (${\approx}1750$ orders) and does not separate the pipelines.}
   \label{fig:combined_sweep}
 \end{figure}
 
-\paragraph{Discussion.} The sweep reveals two clean facts:
+\paragraph{Discussion.} The sweep reveals three clean facts:
 \begin{itemize}
-  \item \textbf{Placement quality dominates budget.} P3's replenish ratio at $|C| = 5$ exceeds P1's and P2's at $|C| = 25$ by an order of magnitude. Adding chargers to a placement that misses the fleet's dwell points does not recover energy.
-  \item \textbf{P3 alone scales with budget.} P3's curve rises monotonically (with one transient dip) from 23\,\% to 44\,\%; P1 and P2 are essentially flat. This is consistent with the hypothesis that picker-station corridor cells have intrinsic dwell, and adding more such cells linearly increases charge capture, whereas the set-cover and affinity-propagation exemplars sit on transit cells where additional chargers see only fleeting contact.
+  \item \textbf{Placement quality dominates budget.} P3's replenish ratio at $|C| = 5$ already exceeds P1's and P2's at $|C| = 25$ by an order of magnitude. Adding chargers to a placement that misses the fleet's dwell points does not recover energy.
+  \item \textbf{P3 alone scales with budget.} P3's curve rises monotonically from 23\,\% to 60\,\%; P1 and P2 are essentially flat. This is consistent with the hypothesis that picker-station corridor cells have intrinsic dwell, and adding more such cells captures additional charge, whereas the set-cover and affinity-propagation exemplars sit on transit cells where additional chargers see only fleeting contact.
+  \item \textbf{The picker-tier heuristic ceiling is approximately 60\,\%.} The replenish curve flattens beyond $|C| = 35$ and is essentially flat between $|C| = 45$ and $|C| = 50$ ($59.7\,\% \to 60.2\,\%$). Even with 50 picker-corridor cells, P3 cannot exceed $\sim 60\,\%$ replenish at this horizon. This is the placement-only ceiling: no further extension of the picker-tier algorithm can break sustainability.
 \end{itemize}
 
 Throughput at $T = \SI{20000}{\second}$ is largely flat across pipelines and budgets ($\approx 1750$ orders), confirming that at this horizon the picker-station capacity, not the charger network, is the binding constraint on order completion.
@@ -479,35 +570,604 @@ Throughput at $T = \SI{20000}{\second}$ is largely flat across pipelines and bud
 The two experiments interact:
 \begin{enumerate}
   \item The 100k experiment (\S\ref{sec:r100k}) shows that no placement at the canonical budget ($|C| = 12$) sustains the fleet over a long horizon, and that pipelines trade off productivity against survivorship in distinct ways.
-  \item The 20k sweep (\S\ref{sec:sweep}) shows that this is not a budget problem in the sense of scarcity: P1 and P2 do not improve at \emph{any} budget tested. The placement \emph{itself} fails to capture energy, and adding cells to a poor placement yields no return.
-  \item Combining the two: the most natural improvement to P1 / P2 is not ``more chargers'' but a hybrid placement that retains some of P3's dwell-aligned cells while keeping the broader spatial spread that gives P1 / P2 their (modest) survivorship advantage at $|C| = 12$. We leave hybrid placements for future work.
+  \item The 20k sweep (\S\ref{sec:sweep}) shows that this is not a budget problem in the sense of scarcity for P1 / P2 (which do not improve at \emph{any} budget tested), and that even P3 --- the only placement that scales meaningfully with budget --- saturates at approximately $60\,\%$ replenish ratio. The picker-tier heuristic cannot, by extension alone, break sustainability.
+  \item Combining the two: at fixed default policy, no placement strategy in the candidate set is operationally sufficient. The remaining ${\approx}40$-percentage-point gap to a self-sustaining fleet must come from somewhere other than placement --- naturally either a hybrid placement combining dwell-aligned and spread cells, or a smarter operating policy (charging thresholds, station selection, charge-duration targets). Both are out of scope for this paper and form the natural Phase~2 of this research programme.
 \end{enumerate}
 
-The preemption policy described in Section~\ref{sec:preemption} is a prerequisite for any of these results: without it, the fleet dies within the first $30{,}000$ seconds regardless of placement, as confirmed by the smoke test described in Section~\ref{sec:design}. Preemption is therefore necessary for placement to matter, but not itself sufficient to compensate for poor placement.
+The preemption policy described in Section~\ref{sec:preemption} is a prerequisite for any of these results: without it, the fleet dies within the first $30{,}000$ seconds regardless of placement, as confirmed by the smoke test described in Section~\ref{sec:design}. Preemption is therefore necessary for placement to matter, but not itself sufficient to compensate for the placement-only energy ceiling characterised here.
 
 \paragraph{Data and code availability.}
 All raw run artefacts (\texttt{run\_summary.json}, \texttt{per\_robot.json}, \texttt{order-finished.csv}) for the 100k experiment are stored under \path{eval/runs/p{1,2,3,4}_100k/p{P}/}; sweep artefacts are under \path{eval/runs/p{1,2,3}_sweep/n{|C|}/}. The aggregated table (Table~\ref{tab:p100k}) is generated by \path{eval/compare_100k.py} and saved to \path{eval/results/p100k_summary.csv}. The combined sweep figure (Fig.~\ref{fig:combined_sweep}) is generated by \path{eval/plot_combined_sweep.py}. Per-pipeline figures (Figs.~\ref{fig:tradeoff}--\ref{fig:states}) are generated by \path{eval/plot_p100k_comparison.py}.
 
+\section{Joint Placement-Policy Optimisation (Phase 2: Constrained RSM)}
+\label{sec:phase2}
+
+The Phase~1 results establish that no placement at $|C| = 12$ is operationally sustainable under the default Bischoff-style policy. We extend the analysis to a second design factor --- the FMS charging policy --- and ask whether joint optimisation over (placement, policy) reveals interactions invisible to single-axis sweeps. This section develops the Phase~2 framework in three steps: a factorial-design screening of all four placements crossed with three binary policy factors, a face-centred Central Composite Design over the surviving placement, and a constrained-RSM treatment of an empirical infeasibility manifold discovered during execution.
+
+\subsection{Methodological framework}
+\label{sec:phase2_method}
+
+\paragraph{Design of Experiments background.}
+Design of Experiments \cite{montgomery2017,box2005} provides the statistical machinery for systematically estimating main effects and interactions of multiple factors. Given $k$ factors, a full factorial at two levels samples all $2^k$ corner points, which scales poorly for large $k$. A fractional factorial $2^{k-p}$ \cite{montgomery2017}, \S 8 reduces sample size by aliasing higher-order interactions with main effects according to a defining relation; it is the standard tool for screening which factors matter before committing to a full quadratic-surface fit. Response Surface Methodology (RSM) \cite{box1951,myers2016,khuri1996} extends DoE to continuous factors and second-order response models. The Central Composite Design (CCD) \cite{box1951} is the canonical RSM design: it consists of $2^k$ factorial corner points, $2k$ axial points at distance $\alpha$ from the centre, and $n_c$ centre-point replicates, totalling $2^k + 2k + n_c$ runs to fit a quadratic in $k$ factors.
+
+The face-centred CCD ($\alpha = 1$) places axial points on the design's faces rather than outside its bounding box; we adopt this variant because the policy-parameter levels $\tau_\text{low} \in \{10,30\}\,\%$ and $\tau_\text{full} \in \{50,100\}\,\%$ are constrained by operational physics (battery cannot exceed $100\,\%$, must remain above $0\,\%$). The face-centred variant trades a small loss of orthogonality for keeping all design points within the operationally feasible region.
+
+\paragraph{Phase 2 design choices.}
+We fix the interrupt mechanism at on@$50\,\%$ throughout Phase~2 because Phase~1 will reveal it to be a binary decision rather than a continuous variable amenable to RSM (Section~\ref{sec:phase2_screening}). We treat charger placement (P1, P2, P3, P4) as a categorical blocking factor in Phase~1, then concentrate Phase~2's continuous-factor RSM on the surviving placement(s) per the Pareto-domination criterion described below.
+
+\subsection{Phase~1 screening (4 placements $\times$ $2^3$ policy factorial)}
+\label{sec:phase2_screening}
+We use a fractional factorial in 4 placements (P1, P2, P3, P4) crossed with a $2^3$ full factorial in three policy parameters: $\tau_\text{low} \in \{15, 25\}\,\%$, $\tau_\text{full} \in \{60, 90\}\,\%$, and the interrupt mechanism $\in \{\text{off}, \text{on@}50\%\}$. Each cell runs at $T = \SI{20000}{\second}$, $|C| = 12$, single seed --- 32 cells in total. Replicate runs are deferred to a later study (see Section~\ref{sec:limitations}).
+
+\paragraph{Pareto-domination criterion.}
+We carry placement $P$ into the Phase~2 RSM if and only if its best-corner observation is not Pareto-dominated by any other placement's best-corner observation across the response triple (orders, replenish, $-$dead\_count). Formally, $P_i$ is dropped iff
+\begin{equation}
+  \exists\, P_j \neq P_i \,\text{ s.t. }\, \mathbf{y}^{*}_{P_j} \succeq \mathbf{y}^{*}_{P_i},\;\;\mathbf{y}^{*}_{P_j} \neq \mathbf{y}^{*}_{P_i}
+\end{equation}
+where $\mathbf{y}^{*}_{P_i}$ is placement $P_i$'s best response vector across its 8 corner observations and $\succeq$ is the component-wise weak partial order with appropriate sign conventions (smaller-is-better for dead\_count). In practice we apply the criterion with a tolerance band of $\pm 5$ orders to absorb single-cell experimental noise.
+
+\paragraph{Findings.} (i)~P3 is the only placement with meaningful policy signal at $|C| = 12$; replenish ratios for P1, P2, P4 sit between $0.3$ and $1.0\,\%$ regardless of policy. (ii)~For P3, replenish increases monotonically with $\tau_\text{low}$, $\tau_\text{full}$, and improves further when the Bischoff interrupt is disabled. (iii)~A single (P2, $\tau_\text{low} = 25$, $\tau_\text{full} = 60$, interrupt = off) cell terminates order completion at simulated tick 7333 of 20000; we identify this as an emergent operational deadlock, treat it as an infeasibility constraint in subsequent analyses, and verify the manifold's narrowness with a 2-cell boundary probe.
+
+\paragraph{Interpretation of the screening result.}
+That P3 alone exhibits policy signal under fixed $|C|=12$ is consistent with the Phase~1 finding (Section~\ref{sec:results}) that placement quality dominates budget by an order of magnitude. P1, P2, and P4 sit at such low absolute replenish ratios ($<1\,\%$) that the second-order policy variation is dwarfed by the first-order placement deficit; even an oracle policy on P1/P2/P4 would not push replenish above the few-percent regime. Conversely, P3's chargers are co-located with high-dwell picker-corridor cells, and the policy parameters meaningfully modulate how long that dwell is converted to replenishment. We therefore concentrate Phase~2's RSM on P3, with $|C|=12$ confirmation runs on P1 and P2 to validate their flat-surface designation.
+
+\subsection{Response surface methodology with infeasibility constraint}
+On the surviving placement (P3), we fit a face-centred Central Composite Design over $(\tau_\text{low}, \tau_\text{full})$ at five levels each, $\{10, 15, 20, 25, 30\}$ and $\{50, 60, 75, 90, 100\}$ respectively, with the interrupt mechanism fixed on @50\,\% and \texttt{disable\_active\_charging}=False. Phase~1 corners (4 cells) are reused as the corner points of the CCD; Phase~2 contributes 4 axial points and a centre point. A second deadlock manifold is discovered at exactly $(\tau_\text{low} = 20\,\%, \tau_\text{full} \ge 89\,\%)$ --- the design's own axial point. A 4-cell boundary probe at $(\tau_\text{low} \in \{19, 21\}, \tau_\text{full} \in \{88, 92\})$ characterises the manifold as approximately
+\begin{equation}
+  \mathcal{D}_{P3} = \{(\tau_\text{low}, \tau_\text{full}) \,:\, 19.5 \le \tau_\text{low} \le 20.5 \;\wedge\; \tau_\text{full} \ge 89\}.
+\end{equation}
+
+\paragraph{Methodological framing.} Following Myers, Montgomery \& Anderson-Cook \cite{myers2016}, \S7.5, we treat $\mathcal{D}_{P3}$ as an infeasibility constraint and fit the quadratic surface
+\begin{align}
+  \hat{y}(x_L, x_F) &= \beta_0 + \beta_1 x_L + \beta_2 x_F \\
+                    &\quad + \beta_{11} x_L^2 + \beta_{22} x_F^2 + \beta_{12} x_L x_F \notag
+\end{align}
+on the 8 clean CCD points only, where $x_L = (\tau_\text{low} - 20)/5$ and $x_F = (\tau_\text{full} - 75)/15$. The constrained optimum is then
+\begin{equation}
+  \max\,\hat{y}(x_L, x_F) \quad \text{s.t.}\; (\tau_\text{low}, \tau_\text{full}) \notin \mathcal{D}_{P3}.
+\end{equation}
+
+\paragraph{Result.} Fit on replenish ratio: $R^2 = 0.81$, constrained optimum at $\tau_\text{low} = 18.4\,\%$, $\tau_\text{full} = 60\,\%$, predicted replenish $= 27.4\,\%$ (Fig.~\ref{fig:rsm_surface}). The constrained optimum equals the unconstrained optimum --- the deadlock manifold is not binding for the recommended policy. Fit on order count: $R^2 = 0.81$, constrained optimum at $\tau_\text{low} = 15\,\%$, $\tau_\text{full} = 90\,\%$, predicted orders $= 1767$.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{phase2_rsm_surface.png}
+  \caption{Fitted P3 quadratic response surface for replenish ratio with the
+  empirical deadlock manifold $\mathcal{D}_{P3}$ (red hatched region) excluded
+  per the constrained-RSM framework of Myers, Montgomery \& Anderson-Cook
+  \cite{myers2016}, \S 7.5. White circles mark the eight clean CCD points
+  used in the regression; the red cross marks the excluded deadlock cell at
+  $(20, 90)$. The constrained optimum (gold star) lies in the feasible
+  region; the constraint is not binding for the recommended policy.}
+  \label{fig:rsm_surface}
+\end{figure}
+
+The total response variation in replenish across the 11 clean cells is only $0.45$ percentage points ($27.04\,\%$ to $27.49\,\%$), indicating a very flat policy surface for P3 with the interrupt enabled. The P3 best corner from Phase~1 (where interrupt = off) reached $31.6\,\%$ replenish, but lies adjacent to the deadlock-prone region of the policy space. This sets up the central tension addressed in Phase~3: a higher-replenish policy (interrupt off) versus a more constrained but operationally safer one (interrupt on @50\,\%).
+
+\section{Robustness Analysis (Phase 3: Taguchi $L_9$)}
+\label{sec:phase3}
+
+We close the joint-optimisation analysis by evaluating the Phase~2 constrained optimum and the Phase~1 best corner under operational noise. This section first develops the Taguchi robust-design framework, then specifies the noise envelope, the orthogonal array, and the signal-to-noise ratios used to quantify robustness.
+
+\subsection{Taguchi robust parameter design background}
+\label{sec:taguchi_method}
+
+The framework of robust parameter design \cite{taguchi1986,phadke1989,ross1996} addresses the two-stage optimisation problem in which a system designer first sets \emph{control factors} (operator-tunable parameters) and the deployed system then experiences \emph{noise factors} (uncontrollable perturbations from environment, demand, hardware degradation, etc.). The objective of robust design is not the nominal optimum --- the control-factor setting that maximises the response in the absence of noise --- but rather the \emph{robust optimum}: the control-factor setting that maximises the response while minimising sensitivity to noise.
+
+Taguchi formulates this through the signal-to-noise (S/N) ratio $\eta$ \cite{taguchi1986}, an objective function that penalises both location (mean of the response) and dispersion (variance under noise). For a response variable $y_i$ measured under $i = 1,\ldots,n$ noise combinations, three S/N forms are standard:
+\begin{align}
+  \eta_\text{LB} &= -10\log_{10}\!\left(\tfrac{1}{n}\sum_{i=1}^n y_i^{-2}\right) && \text{(larger-the-better)} \label{eq:sn_lb} \\
+  \eta_\text{SB} &= -10\log_{10}\!\left(\tfrac{1}{n}\sum_{i=1}^n y_i^{2}\right)  && \text{(smaller-the-better)} \label{eq:sn_sb} \\
+  \eta_\text{NB} &= 10\log_{10}\!\left(\bar{y}^2 / s^2\right) && \text{(nominal-the-best)} \label{eq:sn_nb}
+\end{align}
+The control-factor setting maximising the appropriate $\eta$ is the robust optimum.
+
+\paragraph{Orthogonal arrays.}
+A full factorial across $k$ noise factors at $\ell$ levels each requires $\ell^k$ runs --- prohibitive even at modest $k, \ell$. Taguchi orthogonal arrays \cite{taguchi1986,ross1996} sample noise combinations such that each level of every factor appears the same number of times in combination with each level of every other factor; main-effect estimates are unbiased, at the cost of confounding higher-order interactions. The $L_9(3^4)$ array samples 9 of the $3^4 = 81$ possible noise combinations at four 3-level factors --- a $9{\times}$ reduction in runs while preserving balanced main-effect estimation \cite{phadke1989}.
+
+\paragraph{Why Taguchi rather than full RSM over noise.}
+RSM with response $y_i$ regressed on noise factors would, in principle, also identify a robust optimum (e.g., by minimising the variance term $\beta_{ii} x_i^2$ in the fitted quadratic). We adopt Taguchi's framework instead because:
+\begin{enumerate}
+  \item Several of our noise factors are integer-valued (charger fault count $\in \{0,1,2\}$; fleet size $\in \{18,20,22\}$), and a quadratic surface over integer factors is methodologically awkward.
+  \item The thesis output is a managerial recommendation (``how robust is the policy under realistic perturbations?''), not a continuous response surface; Taguchi's single-number S/N summary is more directly interpretable for that audience.
+  \item Taguchi orthogonal arrays are the standard EM-curriculum tool for noise robustness \cite{ross1996,phadke1989}, which simplifies cross-comparison with industrial practice.
+\end{enumerate}
+
+\subsection{Phase 3 design specification}
+Following the framework of Section~\ref{sec:taguchi_method}, we treat the optimal policy as the \emph{control factor} setting and four operational variables as \emph{noise factors}: demand load multiplier $\in \{0.7, 1.0, 1.3\}$, fleet size $\in \{18, 20, 22\}$ robots, charger fault count $\in \{0, 1, 2\}$ disabled cells, and initial fleet battery fraction $\in \{0.5, 0.7, 1.0\}$. The standard $L_9(3^4)$ orthogonal array is used --- 9 noise combinations per candidate, with each combination assigning balanced levels across the four factors. The L9 array is reproduced in Table~\ref{tab:L9}.
+
+\begin{table}[t]
+  \centering
+  \caption{Standard Taguchi $L_9(3^4)$ orthogonal array \cite{taguchi1986,ross1996}. Levels in our experiment: $A$ = demand load $\{0.7, 1.0, 1.3\}$, $B$ = fleet size $\{18, 20, 22\}$, $C$ = charger faults $\{0, 1, 2\}$, $D$ = initial battery $\{0.5, 0.7, 1.0\}$.}
+  \label{tab:L9}
+  \small
+  \begin{tabular}{ccccc}
+    \toprule
+    Run & $A$ & $B$ & $C$ & $D$ \\
+    \midrule
+    1 & 1 & 1 & 1 & 1 \\
+    2 & 1 & 2 & 2 & 2 \\
+    3 & 1 & 3 & 3 & 3 \\
+    4 & 2 & 1 & 2 & 3 \\
+    5 & 2 & 2 & 3 & 1 \\
+    6 & 2 & 3 & 1 & 2 \\
+    7 & 3 & 1 & 3 & 2 \\
+    8 & 3 & 2 & 1 & 3 \\
+    9 & 3 & 3 & 2 & 1 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Two candidates}
+\begin{description}
+  \item[\emph{Robust}] $\tau_\text{low} = 18\,\%$, $\tau_\text{full} = 60\,\%$, interrupt = on @50\,\% --- the Phase~2 constrained-RSM optimum.
+  \item[\emph{Peak}] $\tau_\text{low} = 25\,\%$, $\tau_\text{full} = 90\,\%$, interrupt = off --- the Phase~1 best corner (highest observed replenish ratio under nominal noise).
+\end{description}
+Each candidate runs the full $L_9$ array, totalling 18 cells at $|C| = 12$, $T = \SI{20000}{\second}$.
+
+\subsection{Signal-to-noise analysis}
+Larger-the-better signal-to-noise ratios are computed per response \cite{taguchi1986}:
+\begin{equation}
+  \eta_\text{LB} = -10 \log_{10}\left(\frac{1}{n}\sum_{i=1}^{n}\frac{1}{y_i^2}\right).
+\end{equation}
+Smaller-the-better S/N for energy uses $\eta_\text{SB} = -10 \log_{10}(\frac{1}{n}\sum y_i^2)$. Operational deadlock is recorded as a binary indicator (last order completion before $0.9 T$).
+
+\begin{table}[t]
+  \centering
+  \caption{Phase~3 Taguchi $L_9$ results. Robust dominates Peak on every aggregate metric --- mean orders, S/N ratio, deadlock count, worst-case throughput, and energy cost per completed order. The $\eta_E$ row in particular demonstrates that Peak's lower absolute energy consumption is illusory: deadlocked cells consume less energy only because robots stop moving, which simultaneously suppresses order completion, producing a worse cost-per-output ratio.}
+  \label{tab:taguchi}
+  \small
+  \begin{tabular}{lrr}
+    \toprule
+    Metric & Robust & Peak \\
+    \midrule
+    Cells with operational deadlock     & \textbf{2 / 9}        & 4 / 9 \\
+    Orders --- mean across $L_9$        & \textbf{1614.7}       & 1348.1 \\
+    Orders --- worst case               & \textbf{1289}         & 325 \\
+    Orders --- S/N (dB, larger-better)  & \textbf{$+63.92$}     & $+58.13$ \\
+    Replenish (\%) --- mean             & \textbf{$-18.9$}      & $-27.6$ \\
+    Replenish (\%) --- S/N              & \textbf{$+35.61$}     & $+31.65$ \\
+    Consumed (MJ) --- mean              & 71.76                 & \textbf{65.76} \\
+    $\eta_E$ (kJ/order) --- mean        & \textbf{44.4}         & 48.8 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Headline result.} Robust dominates Peak on every aggregate metric (Table~\ref{tab:taguchi}, Fig.~\ref{fig:robust_vs_peak}): half the deadlock rate, $5.79\,\text{dB}$ better orders S/N ratio, four times better worst-case throughput. \emph{There is no robustness-vs-peak tradeoff in the final answer:} the constrained-RSM optimum is simultaneously the better mean performer and the more robust performer, refuting the naive expectation that the higher-replenish corner from Phase~1 would be the operationally preferred choice.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{phase3_robust_vs_peak.png}
+  \caption{Phase 3 verdict --- the Phase~2 constrained-RSM optimum (Robust)
+  dominates the Phase~1 best corner (Peak) on every aggregate metric across
+  the $L_9$ noise envelope. Gold border marks the better candidate per panel.}
+  \label{fig:robust_vs_peak}
+\end{figure}
+
+\subsection{Dominant noise factor: initial battery state}
+A per-noise-factor analysis of order count reveals that both candidates are highly sensitive to initial battery fraction (Table~\ref{tab:noise_levels}, Fig.~\ref{fig:taguchi_response}). Demand load, fleet size, and charger fault count each produce variations under $50$ orders mean across their three levels for the Robust candidate; initial battery produces a swing of $438$ orders ($1324 \to 1762$). For the Peak candidate, initial battery is catastrophic: $3$ of $3$ runs at the $50\,\%$ level deadlock.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{phase3_taguchi_response.png}
+  \caption{Phase 3 Taguchi response graph: mean order count versus level for
+  each of the four noise factors, comparing the Robust (blue) and Peak (red)
+  candidates. The Robust candidate is essentially flat across demand, robots,
+  and charger faults; both candidates show a strong response to initial
+  battery state.}
+  \label{fig:taguchi_response}
+\end{figure*}
+
+\begin{table}[t]
+  \centering
+  \caption{Per-noise-factor mean order count, Robust candidate. Initial battery is the dominant noise factor; demand, robots, and faults each produce variations within experimental noise.}
+  \label{tab:noise_levels}
+  \small
+  \begin{tabular}{lrrr}
+    \toprule
+    Factor & Level 1 & Level 2 & Level 3 \\
+    \midrule
+    Demand        & $0.7$: $1620$    & $1.0$: $1604$    & $1.3$: $1620$ \\
+    Robots        & $18$: $1606$     & $20$: $1604$     & $22$: $1634$ \\
+    Faults        & $0$: $1621$      & $1$: $1622$      & $2$: $1601$ \\
+    Initial batt  & $0.5$: $1324$    & $0.7$: $1758$    & $1.0$: $1762$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Managerial implication.} The most operationally actionable lever is start-of-shift battery state, not demand or fleet attrition. A warehouse operator running the recommended (P3, Robust) configuration can absorb $\pm 30\,\%$ demand swings and up to $2$ charger faults with negligible throughput impact, but should ensure the fleet starts each shift at $\ge 70\,\%$ battery state to avoid the dominant deadlock-inducing condition. This is a more concrete operating-procedure recommendation than the policy parameters themselves.
+
+\section{Discussion}
+\label{sec:discussion}
+
+This section interprets the empirical findings against the theoretical framework, isolates the mechanisms behind the dominant effects, and locates the joint-optimisation result within the broader Engineering Management context.
+
+\subsection{Why placement dominates budget by an order of magnitude}
+\label{sec:mech_placement}
+
+Phase~1 Section~\ref{sec:sweep} reports that P1 and P2 cap at $\sim 1\,\%$ replenish ratio across all budgets $|C| \in \{5, \ldots, 25\}$, while P3 climbs to $\sim 60\,\%$ at $|C|=50$. The mechanism follows directly from the energy equation governing each charger.
+
+Charge replenishment at cell $c$ over horizon $T$ is
+\begin{equation}
+  G_c = P_\text{charge} \cdot \int_0^T \mathbf{1}[\text{some robot at } c]\,dt,
+\end{equation}
+i.e., the integrated occupancy of $c$ multiplied by the charger's power rating. Two regimes apply. In the \emph{transit} regime, robots cross cell $c$ during normal motion, contributing fleeting occupancy ($\Delta t \approx \SI{0.5}{\second}$ per pass, since the robot moves at $\sim 1\,\text{cell/s}$). In the \emph{dwell} regime, robots remain at $c$ for extended periods due to picker-station processing or active charging, contributing $\Delta t = O(\text{seconds to minutes})$ per visit.
+
+Set Cover (P1) and Affinity Propagation (P2) place chargers in transit cells, so $G_c$ is bounded by the per-pass time integrated over passing rate. Picker-Station Opportunity Charging (P3) co-locates chargers with dwell cells, so $G_c$ is bounded by station-processing time integrated over occupancy --- two orders of magnitude longer per visit. The $30{\times}$ ratio between P3 and P1/P2 replenish ratios is consistent with this dwell-vs-transit mechanism rather than with any quantitative tuning of charger density: \emph{adding more transit-cell chargers increases the rate of fleeting contacts proportionally, but does not transform their character from transit to dwell}.
+
+This explains why the placement axis cannot be reduced to a charger-count question and why P3's saturation at $\sim 60\,\%$ even at $|C|=50$ (Section~\ref{sec:sweep}) is not a budget problem but a structural ceiling: the picker corridor admits only so many cells, and once those cells are saturated, additional placements regress to the transit regime of P1/P2.
+
+\subsection{Why initial battery state dominates the noise envelope}
+\label{sec:mech_init_batt}
+
+Phase~3 Section~\ref{sec:phase3} demonstrates that initial battery state is the dominant noise factor across both candidate policies, while demand load, fleet size, and charger faults are nearly second-order. The mechanism is a transient ``front-loading'' effect on the energy balance.
+
+Consider the fleet's instantaneous energy state $E(t) = \sum_{r=1}^{N_r} E_r(t)$. Under a self-sustaining policy, the energy balance is the time-integrated difference between gain (from chargers) and consumption (motion + base drain):
+\begin{equation}
+  E(T) = E(0) + \int_0^T \big[ G(t) - C(t) \big]\,dt
+\end{equation}
+where $G(t)$ depends on charger contact and $C(t)$ on motion and base drain. In a steady-state regime the time-average $\overline{G}/\overline{C}$ approaches a system-determined constant (the replenish ratio); in a long-horizon evaluation, the initial energy $E(0)$ becomes negligible relative to the integrated terms.
+
+In our 20{,}000-second horizon, however, the initial energy is \emph{not} negligible: $E(0) = N_r \cdot \frac{1}{2}\, B \cdot \text{init\_batt}$, where $B = \SI{6.48}{\mega\joule}$ is per-robot capacity. At $\text{init\_batt} = 1.0$, the fleet starts with $20 \cdot \SI{6.48}{\mega\joule} = \SI{129.6}{\mega\joule}$ of stored energy --- a substantial fraction of the cumulative consumption ($\sim\SI{75}{\mega\joule}$ in 20{,}000\,s). At $\text{init\_batt} = 0.5$ the fleet starts with $\SI{64.8}{\mega\joule}$, roughly equal to half the energy consumed during the run. The transient phase --- during which the system is depleting the front-loaded reserve --- dominates the evaluation horizon when init\_batt is low.
+
+This also explains why the deadlock manifolds (Sections~\ref{sec:phase2}, \ref{sec:phase3}) cluster at low init\_batt: with fewer joules in reserve, the fleet hits the trigger threshold earlier in coordinated waves, exacerbating contention at chargers. The Robust candidate (interrupt = on@$50\,\%$) breaks these waves by forcing partially-charged robots back into productive work; the Peak candidate (interrupt = off) lets each robot fully recharge before yielding, producing tighter convoys and the higher deadlock rate observed in Phase~3.
+
+\subsection{Why constrained-RSM optimum dominates Phase~1 best corner}
+\label{sec:mech_robust_wins}
+
+The Phase~1 best corner achieves $31.6\,\%$ replenish at nominal noise --- $4\,$pp better than the Phase~2 constrained optimum's $\sim 27\,\%$. A naive optimisation would prefer Peak. Phase~3 reverses this verdict: under the noise envelope, Robust's $-18.9\,\%$ mean replenish dominates Peak's $-27.6\,\%$, and Robust's $1614.7$ mean orders dominates Peak's $1348.1$. We articulate the mechanism via the bias-variance decomposition familiar from response-surface analysis \cite{myers2016}, \S 11.
+
+Let $y(\mathbf{x}, \mathbf{z})$ be the response at control setting $\mathbf{x}$ under noise realisation $\mathbf{z}$. The robust optimum minimises
+\begin{equation}
+  \text{MSE}(\mathbf{x}) = \mathbb{E}_{\mathbf{z}}\big[(y^* - y(\mathbf{x}, \mathbf{z}))^2\big] = \big(y^* - \mathbb{E}_\mathbf{z}[y]\big)^2 + \text{Var}_\mathbf{z}[y]
+\end{equation}
+where $y^*$ is a target. The first term (squared bias) penalises the gap between the noise-averaged mean and target; the second (variance) penalises sensitivity to noise.
+
+Peak optimises only the bias term in the absence of noise. Its policy --- interrupt off, charge to $90\,\%$ --- delivers the highest mean replenish at nominal but leaves the system in a tightly-coupled coordination regime: when noise (low init\_batt) perturbs the timing of charging cycles, the system has no mechanism to resynchronise and falls into deadlock. Robust trades a small bias penalty (giving up a few percentage points of replenish) for a substantial variance reduction (the interrupt mechanism breaks coordination waves before they become deadlocks). The net MSE is lower for Robust because the variance term dominates the small bias gap.
+
+This mechanism explains, in textbook terms, why the constrained-RSM optimum is more robust than the Phase~1 best corner.
+
+\subsection{Comparison with single-axis approaches}
+\label{sec:vs_single_axis}
+
+Two single-axis approaches in the literature warrant explicit comparison:
+
+\paragraph{Bischoff et al. \cite{bischoff2025}} fix the charger placement at the warehouse's static layout (three chargers along the north wall in their WEPAStacks benchmark) and optimise the policy via reinforcement learning. They report that RL-learned policies outperform fixed-threshold heuristics by approximately 1--2\,\% in average service time. Our framework is complementary: at \emph{fixed default policy}, Phase~1 finds a $30{\times}$ replenish ratio gap between P3 and P1/P2 placements --- an order of magnitude larger than the policy-axis gap reported in \cite{bischoff2025}. Combining the two gives a thesis-level claim: at the WEPAStacks layout the policy axis dominates because the placement is fixed; at our P1-vs-P3 comparison the placement axis dominates because the policy is fixed; the joint optimum requires considering both.
+
+\paragraph{Kundu and Saha \cite{kundu2023}} optimise placement via greedy set-cover and report worst-case reachability guarantees. Their analysis is essentially geometric: a charger covers all cells within $d$ hops. We treat their algorithm as our P1 baseline. Phase~1 establishes that worst-case-reachability placement is dominated by dwell-aligned placement (P3) in throughput-oriented metrics by a factor of 30 in replenish ratio, despite P1's geometric coverage being formally complete. This reframes the placement question: \emph{coverage is not the right objective; dwell co-location is}.
+
+\subsection{The role of reinforcement learning in joint optimisation}
+\label{sec:rl_role}
+
+Reinforcement learning (RL) has emerged in the recent literature as a meta-heuristic for the policy sub-problem of charging-strategy optimisation \cite{lin2023,deng2020,mu2022,singh2024,bischoff2025}. A reader familiar with that literature may reasonably ask why this work, which employs Design of Experiments throughout, does not also include an RL baseline. We address the question explicitly because the methodological choice has both substantive and pragmatic justification.
+
+\paragraph{The case for RL in this domain.}
+RL has demonstrated meaningful policy-axis improvements in prior work. Bischoff et al. \cite{bischoff2025} --- the most recent and methodologically rigorous study --- report that their best RL configuration (FullyShaped) achieves a $7.4\,\%$ reduction in average service time over the best interrupt-enabled heuristic baseline on the WEPAStacks warehouse benchmark. RL is well-suited to capturing state-dependent policy decisions that parameterised threshold rules cannot express: dispatching to chargers based on current charger-queue length, remaining work in the system, projected travel distance to the nearest free charger, or coordination signals among neighbouring robots. A complete operational optimisation of the policy axis would benefit from RL exploration.
+
+\paragraph{Why this paper uses DoE/RSM/Taguchi instead.}
+Three methodological reasons motivate the choice:
+
+\begin{enumerate}
+  \item \emph{Alignment with the joint-optimisation thesis.} The contribution of this paper is the joint placement-policy framework, not the policy sub-problem in isolation. The DoE/RSM/Taguchi pipeline directly characterises the interaction structure --- Phase~1 main effects, Phase~2 response surface, Phase~3 noise envelope --- and yields textbook-citeable artefacts (constrained quadratic surfaces, signal-to-noise ratios, Pareto-domination criteria). An RL agent, by contrast, produces a learned policy that is harder to characterise as a function of the design factors; the placement-policy interaction itself does not surface naturally from RL output.
+  \item \emph{Interpretability and the Engineering Management framing.} The decision-grade output of this work --- the CapEx-OpEx-procedural triple of Section~\ref{sec:capex_opex} --- requires that the recommended policy be inspectable and tunable by warehouse operators. A parameterised threshold policy with three named knobs ($\tau_\text{low}$, $\tau_\text{full}$, interrupt) satisfies this requirement; a neural-network charging agent does not, at least not in the same shift-floor-actionable sense. The thesis recommendation is intentionally a configuration any plant manager can verify on paper and adjust through a configuration file rather than a retraining loop.
+  \item \emph{Constraint detection.} The deadlock manifolds in Phases~1--2 surface naturally from the RSM frame: the design point at $(\tau_\text{low}=20\,\%, \tau_\text{full}=90\,\%, \text{interrupt}=\text{on}@50\,\%)$ is a specific axial point whose failure can be probed systematically with a 4-cell boundary scan. An RL agent trained over the same factor ranges would either learn to avoid the manifold (good for the agent's reward but invisible to the analyst) or fall into it (bad for performance, equally opaque). The manifold itself would not appear as an identifiable artefact of the analysis. The RSM frame produces \emph{characterised infeasibility}; RL produces \emph{circumvented or unidentified infeasibility}. For a thesis whose contribution includes the discovery of these manifolds, the methodological alignment is non-trivial.
+\end{enumerate}
+
+\paragraph{Why this scoping choice does not undermine the conclusion.}
+Two empirical observations bound the cost of omitting RL from the present study:
+
+\begin{enumerate}
+  \item RL's reported policy-axis margin over the best heuristic is modest (Bischoff's $7.4\,\%$ on service time, with a wider $16.1\,\%$ margin only under no-interrupt training conditions that produced worse absolute service times). Our placement-axis margin is $\sim\!30\times$ on replenish ratio at the long horizon. Even if RL on our environment matched Bischoff's reported improvement, the joint optimum would shift by single-digit percentage points, not by an order of magnitude.
+  \item Our Robust candidate already incorporates the interrupt mechanism that Bischoff's RL configurations converge to in training. The functional content of the recommended policy --- ``charge in short bursts, break long cycles with interrupt'' --- is the same direction the RL solutions take, just expressed through a simpler and more interpretable control structure. We do not claim that no RL agent could improve on our heuristic; we claim that the joint-optimisation contribution survives any such improvement.
+\end{enumerate}
+
+\paragraph{Where RL fits in the future-work agenda.}
+We identify three concrete extensions where RL would refine rather than redirect the joint-optimisation conclusion:
+\begin{itemize}
+  \item \emph{Confirming the depletion ceiling at P1, P2, P4.} The limitations section (Section~\ref{sec:limitations}) notes that our claim ``P1/P2/P4 are policy-immune at $|C|=12$'' rests on a parameterised threshold-policy class. A PPO agent trained on each of these placements with the same simulator would either confirm the depletion ceiling (strengthening the placement-quality argument) or break it (re-framing the trade-off in a quantitatively interesting way). Either outcome is publishable as a follow-up.
+  \item \emph{State-dependent policy on P3.} An RL agent trained on the P3 placement with the constrained-RSM optimum as initialisation might find a few percentage points of additional replenish by adapting the trigger threshold to fleet-state context, e.g., charging earlier when many robots are already queued at chargers to avoid contention waves.
+  \item \emph{Constrained-MDP formulation respecting deadlock manifolds.} Now that the deadlock zones are empirically characterised, an RL agent with explicit constraint awareness (via a constrained MDP \cite{bischoff2025}) could be deployed to operate near the deadlock boundary without crossing it, potentially harvesting the small marginal gains that the smooth RSM frame cannot.
+\end{itemize}
+
+In each case the RL contribution would refine rather than redirect the joint-optimisation conclusion. The order of operations implicit in the present framework --- \emph{first choose placement, then parameterise the policy, then optionally refine with RL} --- is the order of operations Bischoff et al. follow implicitly (their RL refines policy under an existing fixed placement); we make the placement-first phase explicit and quantify what it buys, leaving the policy-refinement phase open for both heuristic and learning-based methods.
+
+\subsection{Engineering Management interpretation: CapEx-OpEx framework}
+\label{sec:capex_opex}
+
+The Phase~1 placement decision is a capital-expenditure (CapEx) commitment: chargers are physical infrastructure with a fixed cost per cell installed. The Phase~2 policy decision is an operational-expenditure (OpEx) parameter: thresholds and interrupt rules are software configuration, free to retune at zero marginal cost. The Phase~3 robustness analysis is a sensitivity check on operational variables (demand, fleet, faults, init\_batt) under realistic deployment.
+
+A warehouse operator's decision frame is:
+\begin{itemize}
+  \item Choose a placement (CapEx) committing the warehouse to a charger layout.
+  \item Choose a policy (OpEx) given that placement.
+  \item Train operators on the operating procedures that minimise noise-factor variation.
+\end{itemize}
+
+Our results yield three concrete decision-grade outputs.
+
+\paragraph{(1) CapEx recommendation:} P3 (Picker-Station Opportunistic placement) at $|C|=12$ chargers in the picker corridor. The $30{\times}$ ratio over P1/P2 establishes that no other placement family is cost-competitive at any budget tested.
+
+\paragraph{(2) OpEx recommendation:} $\tau_\text{low} = 18\,\%$, $\tau_\text{full} = 60\,\%$, interrupt enabled at $50\,\%$, active-charging dispatch enabled (\texttt{disable\_active\_charging} = false). This is the constrained-RSM optimum, confirmed by Phase~3 to be the robust optimum.
+
+\paragraph{(3) Operating-procedure recommendation:} Ensure the fleet starts each shift with battery $\geq 70\,\%$. This is the dominant noise-factor lever; demand swings ($\pm 30\,\%$) and one or two charger faults are absorbed without throughput impact, but a $50\,\%$ start state risks deadlock at the high-stress L9 cells.
+
+The triple (placement, policy, operating procedure) constitutes a complete CapEx-OpEx-procedural package suitable for industrial deployment, with each element traceable to a phase of the experimental analysis and each decision defended by the corresponding statistical machinery.
+
+\subsection{Cost-per-order interpretation: energy as an operational expense}
+\label{sec:cost_per_order}
+
+The replenish ratio used as a primary response throughout Phases~1--3 is a sustainability metric, not a cost metric. From an Engineering Management perspective, the more directly actionable cost-side KPI is the energy expenditure per completed order, $\eta_E = \text{consumed} / \text{orders}$, which is proportional to the operating-cost-per-order under any fixed electricity rate. We compute $\eta_E$ post-hoc from the existing experimental data and find that it reinforces the framework's joint-optimisation conclusion in three ways.
+
+\paragraph{Short-horizon $\eta_E$ is placement-flat.}
+At the 20{,}000-second horizon, all four placements deliver $\sim 43$ kJ/order regardless of policy (within experimental noise). The reason is structural: consumed energy is dominated by base drain ($P_\text{drain} \cdot T \cdot N_r = 36$\,MJ for the nominal 20-robot fleet over 20{,}000\,s), which is placement-independent; motion energy ($\sim 40$\,MJ) is approximately equal across placements because all deliver the same throughput ($\sim 1750$ orders) at this horizon (picker-capacity-bound, not charger-bound). \emph{If the only decision criterion were $\eta_E$ at 20{,}000\,s, the placement choice would be immaterial}. This is an honest but uncomfortable observation if one were defending the P3 recommendation on cost grounds alone --- it requires the long-horizon view to surface the cost advantage.
+
+\paragraph{Long-horizon $\eta_E$ separates P3 from the others by 17\,\%.}
+At the $T = \SI{100000}{\second}$ horizon (Table~\ref{tab:p100k}, last column), $\eta_E$ values diverge:
+
+\begin{itemize}
+  \item P1: 95.6 kJ/order
+  \item P2: 94.3 kJ/order
+  \item P3: \textbf{80.0 kJ/order} ($-16$\,\% vs P1, $-15$\,\% vs P2)
+  \item P4: 97.9 kJ/order
+\end{itemize}
+
+The mechanism is the productivity-survival trade-off in action: P3 keeps a smaller subset of robots alive but those robots continue producing orders against the fixed base-drain overhead. P1/P2/P4 lose a comparable fraction of fleet to death (8/20 to 17/20) but each completes fewer orders, so the same energy is amortised over a smaller order count. The cost-efficiency reframing therefore agrees with the throughput reframing: P3 wins, by a comparable margin.
+
+\paragraph{Robust vs Peak inverts on energy cost too.}
+In Phase~3 the absolute mean energy consumption is lower for Peak (65.76\,MJ) than for Robust (71.76\,MJ), which would naively suggest Peak is the more economical operating policy. The per-order normalisation reverses this verdict: Peak completes only 1348.1 orders on average (vs Robust's 1614.7) because Peak's interrupt-off policy admits four deadlock cells where robots stop moving and stop producing simultaneously. Per completed order, Peak costs 48.8 kJ/order and Robust costs \textbf{44.4 kJ/order} --- a 9\,\% advantage for Robust on a cost-per-output basis, on top of the 5.79\,dB advantage on the orders S/N. The robust optimum is therefore the cost-efficient optimum as well.
+
+\paragraph{Implication for the managerial recommendation.}
+The CapEx-OpEx package from Section~\ref{sec:capex_opex} extends naturally with a cost-per-order claim: the joint optimum delivers $\sim 17$\,\% lower energy cost per completed order at the long horizon (vs alternative placements at the same budget) and $\sim 9$\,\% lower energy cost per completed order vs the seemingly-higher-replenish Peak policy (in Phase~3 noise envelope). At any realistic electricity rate this is a non-trivial operating expense reduction.
+
+\subsection{Mechanism analysis of deadlock and fleet depletion per pipeline}
+\label{sec:mech_deadlock_depletion}
+
+Two qualitatively different failure modes manifested across the experiments: \emph{depletion} (individual robots run their batteries to zero and transition to the \texttt{dead} state, observed primarily at the 100{,}000-second horizon) and \emph{operational deadlock} (the simulator tick loop continues to advance but order completion ceases, observed at specific (placement, policy) combinations under both short and long horizons). The two have different underlying mechanisms, and the per-pipeline analysis below isolates them.
+
+\paragraph{Depletion mechanism (100k horizon).}
+The empirical distribution of end-of-run battery levels across the 20-robot fleet at $T = 100{,}000$\,s for each pipeline is reported in Fig.~\ref{fig:depletion}. P3 and P4 exhibit a bimodal pattern --- a heavy mass at $0\,\%$ (the dead robots) plus a small surviving subset at moderate state of charge. P1 and P2 show a more dispersed distribution, with $\sim$half the fleet alive but most of those at low battery (below $\tau_\text{low}$). Battery depletion of an individual robot occurs when its energy expenditure over the horizon exceeds its initial reserve plus the integrated charge received from chargers:
+\begin{equation}
+  E_r(T) = E_r(0) + \int_0^T \big[ G_r(t) - C_r(t) \big]\,dt < 0
+\end{equation}
+where $C_r(t)$ is the per-robot consumption (motion plus base drain) and $G_r(t)$ is the per-robot charge gain at chargers. Depletion is therefore controlled by two ratios: the fraction of time robot $r$ spends on a charger cell (controls $G_r$) and the per-tick motion energy cost (controls $C_r$).
+
+\begin{description}
+  \item[\textbf{P1 (Set Cover) — 9/20 dead.}] Chargers occupy interior storage cells distributed across rows 1--29 and columns 10--38. A robot reaches a charger via the FMS's active-dispatch trigger at $\tau_\text{low}$; the charge trip itself consumes substantial motion energy because the storage corridors are not on the robot's productive workflow path. Once at a charger, the cell is a transit cell (not a dwell cell), so a robot either stays for the full active-charge cycle (high productivity cost) or transits past it during normal motion (low energy gain per pass). The 48.8\,\% replenish ratio reflects the system's average over this trade-off; the 9/20 mortality reflects the distribution: robots that happen to be near a charger when $\tau_\text{low}$ fires survive; those that are at the picker stations or in the far storage corners do not reach a charger in time.
+  \item[\textbf{P2 (Affinity Propagation) — 8/20 dead.}] Chargers cluster at high-traffic exemplar cells, also in interior storage but biased toward the traffic-heatmap hotspots. The clustering produces marginally better incidental contact during normal pod-fetching trips (53.0\,\% replenish vs P1's 48.8\,\%), and marginally better survivorship (8/20 vs 9/20). The mechanism is otherwise identical to P1: transit-cell charge with active-dispatch overhead.
+  \item[\textbf{P3 (Picker-Station, hybrid mode) — 17/20 dead.}] Chargers are at picker-corridor cells, which are high-dwell zones during pod processing (seconds to minutes per stop). \emph{Per-visit charge gain is an order of magnitude higher than P1/P2}, which explains the placement-axis dominance reported in Section~\ref{sec:results}. However, in hybrid mode at the 100{,}000-second horizon, the very high throughput (3102 orders, 26\,\% more than P1/P2) means each robot cycles through the picker corridor at a high rate; many robots simultaneously reach the $\tau_\text{low}$ threshold and converge on the limited 12-cell picker-corridor charger network, producing charger contention. Robots that win the contention recover; those that queue exhaust their reserve before reaching a charger. The 49.3\,\% replenish ratio is a system average; the 17/20 mortality is the bimodal distribution: a small surviving subset doing very high productivity, with the rest having died early.
+  \item[\textbf{P4 (Perimeter) — 17/20 dead.}] Chargers occupy column 43 (the right-edge perimeter aisle adjacent to the replenishment stations), far from both the picker stations (left edge) and the storage interior. Every charge trip costs substantial transit energy --- a robot must traverse roughly half the warehouse to reach a charger, charge, and return. The 51.4\,\% replenish ratio looks modestly better than P1/P3 because the perimeter chargers are uncontested, but the per-trip charge gain is consumed largely by the trip itself, leaving little net positive contribution. 17/20 mortality is comparable to P3 but for a different mechanism: P3's robots die because they cannot reach the charger fast enough (contention); P4's robots die because the round-trip is too expensive (geometry).
+\end{description}
+
+\paragraph{Deadlock mechanism.}
+Deadlock is a coordination failure: the simulator's tick loop continues to advance but the FMS's order-dispatch pipeline ceases to produce completions. Robots remain in active states (\texttt{taking\_pod}, \texttt{delivering\_pod}, etc.) but no order traverses the full pipeline to the picker. The mechanism is mutual blocking on the routing graph between robots whose immediate destinations are coupled. Figure~\ref{fig:deadlock_schematic} sketches the spatial structure of each of the three observed deadlock patterns (note: the schematic is conceptual; exact mid-run robot positions are not logged by the simulator). Three deadlock instances were observed in the joint analysis, each driven by a different specific combination:
+
+\begin{description}
+  \item[\textbf{P2 deadlock at $(\tau_\text{low}=25, \tau_\text{full}=60, \text{interrupt}=\text{off})$.}] Aggressive low trigger combined with a weak charge target produces tightly-spaced charge cycles --- only a $35$-percentage-point buffer between preemption and re-departure. Without the interrupt mechanism, charging robots occupy their cells for the full charge duration. Multiple robots converge on the scattered P2 interior chargers, each blocking the cell and the access path needed by another, producing a routing-graph deadlock. Last order completion: tick 7333 of 20{,}000.
+  \item[\textbf{P1 deadlock at $(\tau_\text{low}=20, \tau_\text{full}=75, \text{interrupt}=\text{on}@50\%)$.}] The Phase~2 design centre. Frequent low-trigger cycling on scattered interior chargers creates traffic on the same storage corridors that carry productive pod movement. Even with the interrupt mechanism, a specific concurrent state at this design point produces a routing graph in which no robot can advance without one of the others first moving. Last order: tick 11{,}008.
+  \item[\textbf{P3 deadlock at $(\tau_\text{low}=20, \tau_\text{full}\ge 89, \text{interrupt}=\text{on}@50\%)$.}] The synchronisation resonance described in Section~\ref{sec:phase2}. All 20 robots start at full battery with identical drain rates, so all hit $\tau_\text{low}$ at the same simulator tick when $\tau_\text{low}$ exactly equals the per-fleet steady-state hit time. The convergence wave on the picker-corridor cells is catastrophic because those cells are also the productive-workflow cells: the deadlock blocks pod delivery and charge access simultaneously. The 4-cell boundary probe confirmed the manifold is narrow ($\tau_\text{low} \in [19.5, 20.5]$ AND $\tau_\text{full} \ge 89$) but the central point is severe (last order at tick 1710 of 20{,}000).
+\end{description}
+
+\paragraph{Cross-pipeline pattern.}
+Two unifying observations emerge from the per-pipeline analysis:
+
+\begin{enumerate}
+  \item \emph{Depletion is a function of placement geometry and the trigger threshold.} P1 and P2's transit-cell placements force long charge trips; P3 and P4's deeper placements localise charge but couple the charge access to either productive workflow (P3) or distant geometry (P4). At the default policy at $|C|=12$, every placement we tested exhibited depletion (8/20 to 17/20 dead at the 100{,}000-second horizon). \emph{Whether a sufficiently advanced policy --- state-dependent dispatch, contention-aware routing, RL-learned charging schedules --- can eliminate depletion at any placement at this budget is not established by our data and is identified as an open question in Section~\ref{sec:limitations}.} The policy effects we did measure (Phases~2--3 on P3) are an order of magnitude smaller than the placement effects (Phase~1), which is suggestive but not dispositive: it remains possible that some policy class outside our parameterisation could close the gap.
+  \item \emph{Deadlock is a function of policy synchronisation and the interrupt mechanism.} The three observed deadlocks all involve either an aggressive trigger with no interrupt (P2 case) or a resonance condition at the design centre that the interrupt cannot fully break (P3 and P1 cases). The interrupt mechanism --- adopted from Bischoff et al. \cite{bischoff2025} --- is the single most effective policy intervention against deadlock observed in our experiments; the constrained-RSM optimum's interrupt-on setting is therefore not coincidental.
+\end{enumerate}
+
+These observations also explain why the Robust candidate dominates the Peak candidate in Phase~3: Peak's interrupt-off policy is structurally vulnerable to the deadlock mechanism described above, particularly under low-initial-battery noise, while Robust's interrupt-on policy breaks the contention waves before they coalesce.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{deadlock_schematic.png}
+  \caption{Schematic illustration of the three observed deadlock mechanisms. The figure is conceptual (exact mid-run robot positions are not logged by the simulator); spatial relationships and arrows indicate the qualitative blocking structure that the run logs imply.
+  \emph{P1} (left): frequent low-trigger cycling on scattered storage chargers creates traffic on the same corridors as productive pod motion; mutual blocking arises because charging robots and pod-fetching robots compete for the same access paths.
+  \emph{P2} (centre): tight charge cycles with the interrupt disabled cause robots to occupy cluster cells for the full charging duration; cycles of mutual blocking form between cluster groups.
+  \emph{P3} (right): synchronisation resonance at $\tau_\text{low}\approx 20\,\%$ causes near-simultaneous threshold crossings; the convergence wave on the picker-corridor cells is catastrophic because those cells double as productive-workflow cells.}
+  \label{fig:deadlock_schematic}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{depletion_distribution.png}
+  \caption{End-of-run battery distribution across the 20-robot fleet at $T = \SI{100000}{\second}$, $|C|=12$, one panel per placement pipeline. P3 and P4 exhibit a bimodal pattern with a heavy mass at $0\,\%$ (the 17/20 dead robots) and a small surviving subset at moderate state of charge; P1 and P2 are more dispersed with most of the fleet alive but at low battery (below $\tau_\text{low}=20\,\%$). The pattern is consistent with the per-pipeline depletion mechanism analysis: scattered-charger placements (P1, P2) distribute charge access broadly but at low per-pass intensity, producing the spread; dwell-aligned (P3) and perimeter-isolated (P4) placements concentrate charge access either into a contested zone (P3) or behind a long round-trip (P4), producing the bimodal survival pattern.}
+  \label{fig:depletion}
+\end{figure*}
+
+\subsection{Implications for warehouse design beyond charging}
+
+The methodology generalises beyond the specific RMFS-charging context. Three transfer points are worth flagging:
+
+\begin{enumerate}
+  \item \emph{Joint optimisation as a default frame.} Many warehouse-design decisions decompose into ``static layout'' and ``dynamic policy'' axes (storage allocation × dispatch rules; aisle topology × routing; pod placement × retrieval order). The phased DoE-RSM-Taguchi pipeline transfers directly with axis substitution.
+  \item \emph{Constrained RSM for emergent failure modes.} Discrete-event simulators of complex multi-agent systems routinely exhibit deadlock-like emergent failures at specific parameter combinations. Treating these as infeasibility constraints (rather than data anomalies) produces both rigorous fits and publishable findings about the system's failure structure.
+  \item \emph{Robust design for managerial recommendations.} Taguchi-style noise robustness translates into operating-procedure recommendations (``ensure $X$ at the start of each shift''), which are typically more actionable for operators than parameter tuning recommendations. This argument generalises to any CapEx-OpEx-procedural decomposition.
+\end{enumerate}
+
+\section{Limitations}
+\label{sec:limitations}
+The simulator does not currently expose a seed parameter to the experiment runner, so replicate runs of the same (placement, policy, noise) configuration are not possible. We therefore cannot perform a formal lack-of-fit $F$-test on the Phase~2 quadratic surfaces; coefficients are reported as point estimates and the constrained optimum is a deterministic prediction. Phase~3 noise-factor S/N ratios likewise reflect single-realisation simulator behaviour. Extending the simulator with a seed-controlled RNG, adding centre-point replicates to Phase~2, and replicating Phase~3 cells across $\ge 3$ seeds is identified as the highest-priority follow-up.
+
+The deadlock manifolds discovered in Phases~1--2 (P2 at $\tau_\text{low}=25, \tau_\text{full}=60$, interrupt off; P3 at $\tau_\text{low}\approx 20, \tau_\text{full}\ge 89$, interrupt on @50\,\%) are characterised within the immediate neighbourhood of the design centre. A wider sweep of policy space may reveal additional infeasible regions; this is left as future work.
+
 \section{Conclusion}
-We presented four placement algorithms for charging stations in an RMFS --- Set Cover Approximation, Affinity Propagation, Picker-Station Opportunity Charging, and a Perimeter control --- and benchmarked them empirically in a 20-robot, $\SI{30}{\cell}\times\SI{40}{\cell}$ simulator over a $\SI{100000}{\second}$ horizon. The Set Cover pipeline ensures strict geographical reachability, Affinity Propagation responds dynamically to traffic via mathematical clustering, the Picker-Station Heuristic exploits picker-corridor dwell for true opportunistic charging, and the Perimeter strategy serves as an isolation control.
+\label{sec:conclusion}
+We presented a phased Design of Experiments framework for joint placement-policy optimisation of charging infrastructure in a Robotic Mobile Fulfillment System. Phase~1 evaluated four placement algorithms --- Set Cover Approximation, Affinity Propagation, Picker-Station Opportunity Charging, and a Perimeter control --- at a fixed default policy across a long horizon ($\SI{100000}{\second}$) and a charger-budget sweep, establishing that placement quality dominates budget by an order of magnitude and that no placement at $|C|=12$ is operationally sustainable under the default policy. Phase~2 fit a face-centred Central Composite Design over policy thresholds at the surviving placement, employed Constrained Response Surface Methodology to handle a discovered deadlock manifold at $(\tau_\text{low}\approx 20, \tau_\text{full}\ge 89)$, and identified the constrained optimum at $(\tau_\text{low}=18\,\%, \tau_\text{full}=60\,\%, \text{interrupt}=\text{on}@50\,\%)$. Phase~3 evaluated this candidate against the Phase~1 best corner (interrupt off) through a Taguchi $L_9$ orthogonal array over four operational noise factors and found that the constrained-RSM optimum is simultaneously the better mean performer (1614.7 vs 1348.1 orders) and the more robust performer (deadlock rate 2/9 vs 4/9, orders S/N $+5.79\,\text{dB}$).
 
-Two empirical findings frame the contribution. First, placement strategy creates a productivity-survival tradeoff at a fixed $|C| = 12$ budget: cluster-based placement (P2) maximises survivorship, dwell-aligned placement (P3) maximises throughput, and neither dominates the other axis. Second, a charger-budget sweep across $|C| \in \{5,\ldots,25\}$ shows that placement quality dominates budget; pipelines whose chargers miss the fleet's dwell points (P1, P2) do not benefit from additional chargers, while only the dwell-aligned pipeline (P3) scales meaningfully with budget. We further showed that a preemptive low-battery trigger embedded in the pre-acquisition phase of the FMS is a prerequisite for any pipeline to survive the long horizon, but is not itself sufficient to compensate for an energy-deficient placement.
+The framework yields three contributions of practical interest. Methodologically, treating discovered deadlock zones as infeasibility constraints --- rather than as missing data points to be substituted --- preserves statistical defensibility while turning the deadlock manifolds themselves into research findings. Empirically, the most operationally actionable lever in the noise envelope is start-of-shift battery state, not demand or fleet-attrition variation; a warehouse operator absorbs $\pm 30\,\%$ demand swings and up to two charger faults with minimal impact on throughput, while a $50\,\%$ start-of-shift battery state is catastrophic. The joint optimum also dominates the alternatives on energy cost per completed order ($\eta_E = 80$\,kJ/order vs $94$--$98$\,kJ/order for P1/P2/P4 at the long horizon, a $\sim 17\,\%$ operating-expense reduction; within Phase~3 the Robust policy delivers $44.4$\,kJ/order vs Peak's $48.8$\,kJ/order despite the latter's lower absolute consumption, because Peak's deadlock cells suppress order completion). As a recommendation, the joint optimum (P3 placement with $|C|=12$ picker-corridor cells; policy $\tau_\text{low}=18\,\%$, $\tau_\text{full}=60\,\%$, interrupt enabled at $50\,\%$; operating practice ensuring $\ge 70\,\%$ initial battery) constitutes a CapEx-OpEx package that admits an explicit cost-benefit comparison with single-axis optimisation.
 
-Future work will evaluate hybrid placements that combine P3's dwell alignment with the broader spatial spread of P1 / P2, replicate runs with multiple seeds, and sweep order-arrival rate to expose the productivity ceiling at which all placements collapse. A capacity-versus-count comparison (raising $E_\text{cap}$ instead of $|C|$) would also illuminate the cost-benefit boundary between robot-side and infrastructure-side investment.
+Future work will replicate the Phase~2 RSM and Phase~3 $L_9$ across multiple RNG seeds, extend the policy axis to include the disable-active-charging mode (pure-opportunistic regime) under the same RSM framework, and characterise hybrid placements combining P3's dwell-alignment with the spatial spread of the set-cover and affinity-propagation algorithms. A wider sweep of the policy space to map additional infeasible regions, and a capacity-versus-count comparison raising $E_\text{cap}$ instead of $|C|$, would also enrich the cost-benefit boundary between robot-side and infrastructure-side investment.
+
+\appendices
+
+\section{Phase 3 Taguchi $L_9$ Per-Cell Results}
+\label{app:l9}
+
+Table~\ref{tab:l9_robust} reports the per-cell observations for the Robust candidate (CRSM optimum: $\tau_\text{low}=18\,\%$, $\tau_\text{full}=60\,\%$, interrupt = on@$50\,\%$) across the nine $L_9$ noise combinations. Table~\ref{tab:l9_peak} reports the corresponding observations for the Peak candidate ($\tau_\text{low}=25\,\%$, $\tau_\text{full}=90\,\%$, interrupt = off). Operational deadlock is recorded as a binary indicator (Y if last order completion occurred before $0.9 T = 18{,}000$ simulated seconds).
+
+Both tables list the four $L_9$ noise factors --- demand load multiplier $A$, fleet size $B$, charger fault count $C$, initial battery fraction $D$ --- alongside three response variables: total orders completed, replenish ratio (gained energy divided by total energy consumption), and total fleet energy consumption in megajoules. The aggregate signal-to-noise statistics reported in Table~\ref{tab:taguchi} are computed from these per-cell observations using equations (\ref{eq:sn_lb})--(\ref{eq:sn_sb}).
+
+\begin{table}[t]
+  \centering
+  \caption{Phase~3 $L_9$ per-cell results, Robust candidate. ``DL'' is the operational deadlock indicator (Y if order completion ceased before $0.9 T$). All cells reached $T = \SI{20000}{\second}$, $|C|=12$, single seed.}
+  \label{tab:l9_robust}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{rrrrrrrrr}
+    \toprule
+    Run & $A$ & $B$ & $C$ & $D$ & Orders & Replen.\,(\%) & Cons.\,(MJ) & DL \\
+    \midrule
+     1 & 0.7 & 18 & 0 & 0.5 & 1327 & $-53.99$ & 60.65 &   \\
+     2 & 0.7 & 20 & 1 & 0.7 & 1759 & $-24.67$ & 75.88 &   \\
+     3 & 0.7 & 22 & 2 & 1.0 & 1773 & $+24.51$ & 79.87 &   \\
+     4 & 1.0 & 18 & 1 & 1.0 & 1750 & $+27.65$ & 69.86 &   \\
+     5 & 1.0 & 20 & 2 & 0.5 & 1289 & $-49.49$ & 64.35 & Y \\
+     6 & 1.0 & 22 & 0 & 0.7 & 1773 & $-27.37$ & 79.55 &   \\
+     7 & 1.3 & 18 & 2 & 0.7 & 1742 & $-27.68$ & 69.62 &   \\
+     8 & 1.3 & 20 & 0 & 1.0 & 1763 & $+27.25$ & 76.03 &   \\
+     9 & 1.3 & 22 & 1 & 0.5 & 1356 & $-66.02$ & 70.04 & Y \\
+    \midrule
+    \multicolumn{5}{r}{\textit{Mean}} & 1614.7 & $-18.87$ & 71.76 & 2/9 \\
+    \multicolumn{5}{r}{\textit{Min}}  & 1289   & $-66.02$ & 60.65 &     \\
+    \multicolumn{5}{r}{\textit{Max}}  & 1773   & $+27.65$ & 79.87 &     \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \caption{Phase~3 $L_9$ per-cell results, Peak candidate. The Peak candidate accumulates $4$ deadlock cells (vs $2$ for Robust) and a worst-case throughput of only $325$ orders --- approximately $4{\times}$ worse than Robust's worst case.}
+  \label{tab:l9_peak}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{rrrrrrrrr}
+    \toprule
+    Run & $A$ & $B$ & $C$ & $D$ & Orders & Replen.\,(\%) & Cons.\,(MJ) & DL \\
+    \midrule
+     1 & 0.7 & 18 & 0 & 0.5 & 1056 & $-62.57$ & 54.46 & Y \\
+     2 & 0.7 & 20 & 1 & 0.7 &  325 & $-82.34$ & 42.92 & Y \\
+     3 & 0.7 & 22 & 2 & 1.0 & 1772 & $+23.87$ & 80.49 &   \\
+     4 & 1.0 & 18 & 1 & 1.0 & 1737 & $+27.57$ & 69.14 &   \\
+     5 & 1.0 & 20 & 2 & 0.5 & 1021 & $-70.62$ & 57.97 & Y \\
+     6 & 1.0 & 22 & 0 & 0.7 & 1740 & $-26.81$ & 80.09 &   \\
+     7 & 1.3 & 18 & 2 & 0.7 & 1621 & $-28.92$ & 66.91 &   \\
+     8 & 1.3 & 20 & 0 & 1.0 & 1764 & $+27.02$ & 75.92 &   \\
+     9 & 1.3 & 22 & 1 & 0.5 & 1097 & $-55.53$ & 63.91 & Y \\
+    \midrule
+    \multicolumn{5}{r}{\textit{Mean}} & 1348.1 & $-27.59$ & 65.76 & 4/9 \\
+    \multicolumn{5}{r}{\textit{Min}}  &  325   & $-82.34$ & 42.92 &     \\
+    \multicolumn{5}{r}{\textit{Max}}  & 1772   & $+27.57$ & 80.49 &     \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Observations from the per-cell data.}
+The Peak candidate's worst case (Run 2: $325$ orders, last order at tick $3{,}736$) corresponds to demand=$0.7$, fleet=$20$, faults=$1$, init\_batt=$0.7$ --- a cell with no extreme noise level on any single factor, but the combination of moderate fleet attrition (1 charger fault on 12 cells), the default fleet size, and a $70\,\%$ initial battery state was sufficient to trigger deadlock under the interrupt-off policy. The Robust candidate completes the same run cleanly (1759 orders, $-24.67\,\%$ replenish), demonstrating the interrupt mechanism's role in absorbing operational noise rather than the underlying placement difference (both candidates use the identical P3 layout).
+
+Conversely, both candidates clear the cells with init\_batt $\geq 0.7$ and no deadlock at fleet=$22$ + faults=$2$ (Robust Run 3, Peak Run 3), suggesting that the interaction between low initial battery and the policy regime --- not absolute infrastructure stress --- drives the deadlock outcomes.
 
 \begin{thebibliography}{00}
 
+% ── Charger placement ──────────────────────────────────────────────────
 \bibitem{kundu2023}
 T. Kundu and I. Saha, ``Approximation Algorithms for Charging Station Placement for Mobile Robots,'' \emph{2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, Detroit, MI, USA, 2023, pp. 4770--4776.
 
 \bibitem{baras2023}
 N. Baras, A. Chatzisavvas, D. Ziouzios, I. Vanidis, and M. Dasygenis, ``Improving the Efficiency of Modern Warehouses Using Smart Battery Placement,'' \emph{Future Internet}, vol. 15, no. 11, p. 353, 2023.
 
+\bibitem{wang2014}
+Y. H. Wang, H. M. Zhang, and L. S. Peh, ``Research on power consumption of lithium-ion battery protection circuit,'' \emph{Advanced Materials Research}, vol. 1049--1050, pp. 582--585, 2014.
+
+% ── Charging strategy / policy ─────────────────────────────────────────
 \bibitem{bischoff2025}
 J. Bischoff, A. Rinciog, and A. Meyer, ``Reinforcement Learning for AMR Charging Decisions: The Impact of Reward and Action Space Design,'' \emph{arXiv preprint arXiv:2505.11136}, 2025.
 
+\bibitem{ebben2001}
+M. Ebben, \emph{Logistic Control in Automated Transportation Networks}, Ph.D. thesis, University of Twente, Netherlands, 2001.
+
+\bibitem{colling2019}
+D. Colling, J. Oehler, and K. Furmans, ``Battery charging strategies for AGV systems,'' \emph{Logistics Journal: Proceedings}, vol. 2019, no. 12, 2019.
+
+\bibitem{shaukat2022}
+H. R. Shaukat and M. A. Shaukat, ``Computation of number of charges required for automated guided vehicles with multiple time constraints,'' in \emph{2022 IEEE 8th Int. Conf. Smart Instrumentation, Measurement and Applications (ICSIMA)}, 2022, pp. 64--69.
+
+\bibitem{kabir2018}
+Q. S. Kabir and Y. Suzuki, ``Increasing manufacturing flexibility through battery management of automated guided vehicles,'' \emph{Computers \& Industrial Engineering}, vol. 117, pp. 225--236, Mar. 2018.
+
+\bibitem{lin2023}
+C. C. Lin, K. Y. Chen, and L. T. Hsieh, ``Real-time charging scheduling of automated guided vehicles in cyber-physical smart factories using feature-based reinforcement learning,'' \emph{IEEE Trans. Intell. Transp. Syst.}, vol. 24, no. 4, pp. 4016--4026, Apr. 2023.
+
+\bibitem{deng2020}
+Y. Deng, B. An, Z. Qiu, L. Li, Y. Wang, and Y. Xu, ``Battery management for automated warehouses via deep reinforcement learning,'' in \emph{ICONIP 2020}, Springer, 2020, pp. 126--139.
+
+\bibitem{mu2022}
+Y. Mu, Y. Li, K. Lin, K. Deng, and Q. Liu, ``Battery management for warehouse robots via average-reward reinforcement learning,'' in \emph{2022 IEEE Int. Conf. Robotics and Biomimetics (ROBIO)}, 2022.
+
+\bibitem{singh2024}
+N. Singh, A. Akcay, Q. V. Dang, T. Martagan, and I. Adan, ``Dispatching AGVs with battery constraints using deep reinforcement learning,'' \emph{Computers \& Industrial Engineering}, vol. 187, p. 109678, Jan. 2024.
+
+\bibitem{singh2022}
+N. Singh, Q. V. Dang, A. Akcay, I. Adan, and T. Martagan, ``A matheuristic for AGV scheduling with battery constraints,'' \emph{European Journal of Operational Research}, vol. 298, no. 3, pp. 855--873, May 2022.
+
+\bibitem{meyer2024}
+A. Meyer, T. Gschwind, B. Amberg, and D. Colling, ``Exact algorithms for routing electric autonomous mobile robots in intralogistics,'' \emph{European Journal of Operational Research}, Dec. 2024.
+
+% ── RMFS / parts-to-picker / warehouse design ──────────────────────────
+\bibitem{wurman2008}
+P. R. Wurman, R. D'Andrea, and M. Mountz, ``Coordinating hundreds of cooperative, autonomous vehicles in warehouses,'' \emph{AI Magazine}, vol. 29, no. 1, pp. 9--20, 2008.
+
+\bibitem{boysen2019}
+N. Boysen, R. de Koster, and F. Weidinger, ``Warehousing in the e-commerce era: A survey,'' \emph{European Journal of Operational Research}, vol. 277, no. 2, pp. 396--411, 2019.
+
+\bibitem{lamballais2017}
+T. Lamballais, D. Roy, and M. B. M. de Koster, ``Estimating performance in a robotic mobile fulfillment system,'' \emph{European Journal of Operational Research}, vol. 256, no. 3, pp. 976--990, 2017.
+
+\bibitem{dekoster2007}
+R. de Koster, T. Le-Duc, and K. J. Roodbergen, ``Design and control of warehouse order picking: A literature review,'' \emph{European Journal of Operational Research}, vol. 182, no. 2, pp. 481--501, Oct. 2007.
+
+\bibitem{vis2006}
+I. F. A. Vis, ``Survey of research in the design and control of automated guided vehicle systems,'' \emph{European Journal of Operational Research}, vol. 170, no. 3, pp. 677--709, May 2006.
+
+\bibitem{pfrommer2020}
+J. Pfrommer and A. Meyer, ``Autonomously organized block stacking warehouses: A review of decision problems and major challenges,'' \emph{Logistics Journal: Proceedings}, vol. 2020, no. 12, Dec. 2020.
+
+\bibitem{pfrommer2022}
+J. Pfrommer, A. Rinciog, S. Zahid, M. Morrissey, and A. Meyer, ``SLAPStack: A simulation framework and a large-scale benchmark use case for autonomous block stacking warehouses,'' Springer, 2022, pp. 291--305.
+
+% ── DoE / RSM / Taguchi methodology ────────────────────────────────────
+\bibitem{montgomery2017}
+D. C. Montgomery, \emph{Design and Analysis of Experiments}, 9th ed. Hoboken, NJ: Wiley, 2017.
+
+\bibitem{box2005}
+G. E. P. Box, J. S. Hunter, and W. G. Hunter, \emph{Statistics for Experimenters: Design, Innovation, and Discovery}, 2nd ed. Hoboken, NJ: Wiley-Interscience, 2005.
+
+\bibitem{box1951}
+G. E. P. Box and K. B. Wilson, ``On the experimental attainment of optimum conditions,'' \emph{Journal of the Royal Statistical Society, Series B}, vol. 13, no. 1, pp. 1--45, 1951.
+
+\bibitem{myers2016}
+R. H. Myers, D. C. Montgomery, and C. M. Anderson-Cook, \emph{Response Surface Methodology: Process and Product Optimisation Using Designed Experiments}, 4th ed. Hoboken, NJ: Wiley, 2016.
+
+\bibitem{khuri1996}
+A. I. Khuri and J. A. Cornell, \emph{Response Surfaces: Designs and Analyses}, 2nd ed. New York: Marcel Dekker, 1996.
+
+\bibitem{taguchi1986}
+G. Taguchi, \emph{Introduction to Quality Engineering: Designing Quality into Products and Processes}. Tokyo: Asian Productivity Organization, 1986.
+
+\bibitem{phadke1989}
+M. S. Phadke, \emph{Quality Engineering Using Robust Design}. Englewood Cliffs, NJ: Prentice Hall, 1989.
+
+\bibitem{ross1996}
+P. J. Ross, \emph{Taguchi Techniques for Quality Engineering: Loss Function, Orthogonal Experiments, Parameter and Tolerance Design}, 2nd ed. New York: McGraw-Hill, 1996.
+
+\bibitem{kuhnle2019}
+A. Kuhnle, L. Schäfer, N. Stricker, and G. Lanza, ``Design, implementation and evaluation of reinforcement learning for an adaptive order dispatching in job shop manufacturing systems,'' \emph{Procedia CIRP}, vol. 81, pp. 234--239, 2019.
+
+% ── Energy modelling ───────────────────────────────────────────────────
 \bibitem{zakka2025}
-A. Zakka \emph{et al.}, ``Energy modeling for Robotic Mobile Fulfillment Systems,'' \emph{Unpublished Working Paper}, 2025.
+A. Zakka \emph{et al.}, ``Energy modelling for Robotic Mobile Fulfillment Systems,'' \emph{Unpublished Working Paper}, 2025.
+
+\bibitem{haney1995}
+R. Haney, ``Modelling battery constraints in discrete event automated guided vehicle simulations,'' \emph{International Journal of Production Research}, vol. 33, no. 11, pp. 3023--3040, Nov. 1995.
 
 \end{thebibliography}
 

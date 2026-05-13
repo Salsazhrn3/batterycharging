@@ -1,0 +1,162 @@
+[
+  {
+    "robot_id": 1519,
+    "battery_level_j": 3608845.391711506,
+    "battery_pct": 55.69205851406645,
+    "energy_consumption_j": 1129803.8882879757,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1520,
+    "battery_level_j": 3612910.5762189105,
+    "battery_pct": 55.75479284288443,
+    "energy_consumption_j": 1080903.883780405,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1521,
+    "battery_level_j": 3518225.687724787,
+    "battery_pct": 54.293606292049176,
+    "energy_consumption_j": 1172882.59227437,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1522,
+    "battery_level_j": 3645847.4539702153,
+    "battery_pct": 56.26307799336752,
+    "energy_consumption_j": 1042774.0660296,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1523,
+    "battery_level_j": 3543468.123426007,
+    "battery_pct": 54.683150052870474,
+    "energy_consumption_j": 1147347.5965729645,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1524,
+    "battery_level_j": 3584303.690922983,
+    "battery_pct": 55.313328563626285,
+    "energy_consumption_j": 1116605.349075847,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1525,
+    "battery_level_j": 3608358.3573033465,
+    "battery_pct": 55.68454255097757,
+    "energy_consumption_j": 1105715.8826955203,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1526,
+    "battery_level_j": 3561470.466681133,
+    "battery_pct": 54.9609639919928,
+    "energy_consumption_j": 1136366.6933173926,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1527,
+    "battery_level_j": 3533374.8489149995,
+    "battery_pct": 54.52738964374999,
+    "energy_consumption_j": 1160073.91108405,
+    "current_state": "delivering_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1528,
+    "battery_level_j": 3516624.4678454893,
+    "battery_pct": 54.268896108726686,
+    "energy_consumption_j": 1173386.7121537519,
+    "current_state": "delivering_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1529,
+    "battery_level_j": 3572869.972952239,
+    "battery_pct": 55.13688229864566,
+    "energy_consumption_j": 1125918.0070459838,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1530,
+    "battery_level_j": 3605952.7186538707,
+    "battery_pct": 55.647418497744916,
+    "energy_consumption_j": 1086764.6413455196,
+    "current_state": "delivering_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1531,
+    "battery_level_j": 3617749.0064301323,
+    "battery_pct": 55.829459975773645,
+    "energy_consumption_j": 1083964.5735689085,
+    "current_state": "delivering_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1532,
+    "battery_level_j": 3609346.233884722,
+    "battery_pct": 55.69978755994941,
+    "energy_consumption_j": 1083297.9861147113,
+    "current_state": "idle",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1533,
+    "battery_level_j": 3645678.1394769605,
+    "battery_pct": 56.260465115385195,
+    "energy_consumption_j": 1081927.000521846,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1534,
+    "battery_level_j": 3608349.2278522616,
+    "battery_pct": 55.684401664386755,
+    "energy_consumption_j": 1078955.772146925,
+    "current_state": "returning_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1535,
+    "battery_level_j": 3584160.0182371098,
+    "battery_pct": 55.311111392547986,
+    "energy_consumption_j": 1107240.8217580724,
+    "current_state": "returning_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1536,
+    "battery_level_j": 3573343.625237304,
+    "battery_pct": 55.14419174748926,
+    "energy_consumption_j": 1132685.2147618246,
+    "current_state": "taking_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1537,
+    "battery_level_j": 3609747.0430858955,
+    "battery_pct": 55.70597288712802,
+    "energy_consumption_j": 1085237.6569129282,
+    "current_state": "delivering_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1538,
+    "battery_level_j": 3635227.399392997,
+    "battery_pct": 56.09918826223761,
+    "energy_consumption_j": 1086599.6806054923,
+    "current_state": "delivering_pod",
+    "is_charging": false
+  }
+]

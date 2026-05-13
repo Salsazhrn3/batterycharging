@@ -39,6 +39,14 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ACTIVATE_NEAREST = True
 
+# ── Phase 3 noise-factor overrides (Taguchi robustness) ────────────────────
+# Set by run_one.py before setup() based on the override JSON. Each defaults
+# to None which means "use the hard-coded value below". These are deliberately
+# module-level (not class attributes) because they affect setup-time logic
+# rather than per-robot state.
+NUM_ROBOTS_OVERRIDE: int | None = None        # default fleet size = 20
+DEMAND_LOAD_FACTOR_OVERRIDE: float | None = None  # default = 1.0 (×300 orders/hr)
+
 
 class DirectedGraph:
     key = ''
@@ -205,7 +213,7 @@ stations = [
 
 def initRobots(universe: Inventory):
 
-    num_robot = 20  # Number of robots
+    num_robot = NUM_ROBOTS_OVERRIDE if NUM_ROBOTS_OVERRIDE is not None else 20  # Number of robots
 
     robots = []
     x_range = (5, 43)
@@ -261,6 +269,10 @@ def draw_layout(universe):
 def draw_layout_from_generated_file(universe: Inventory):
     draw_storage_from_generated_file(universe)
 
+    # Apply Phase-3 demand-load noise factor (default 1.0).
+    _demand_factor = DEMAND_LOAD_FACTOR_OVERRIDE if DEMAND_LOAD_FACTOR_OVERRIDE is not None else 1.0
+    _order_cycle_time = max(1, int(round(300 * _demand_factor)))
+
     # Config Orders
     assign_skus_to_pods(universe.pod_manager)
     config_orders(
@@ -272,7 +284,7 @@ def draw_layout_from_generated_file(universe: Inventory):
         # items_orders_class_configuration={"A": 0.7, "B": 0.2, "C": 0.1},  # data 1 - 8 Item class configuration in warehouse
         # items_orders_class_configuration={"A": 0.3, "B": 0.3, "C": 0.5}, # original
         quantity_range=[1, 12],  # Quantity range of number of SKU in each order
-        order_cycle_time=300,  # Number of order per hour #previous data 1 - 12 use 500 
+        order_cycle_time=_order_cycle_time,  # orders/hour, scaled by DEMAND_LOAD_FACTOR_OVERRIDE
         order_period_time=9,  # the total hours
         order_start_arrival_time=0,  # Start time of order arrival
         date=1,
@@ -288,7 +300,7 @@ def draw_layout_from_generated_file(universe: Inventory):
         # items_orders_class_configuration={"A": 0.6, "B": 0.2, "C": 0.2}, #data 10 , 11 , 12
         # items_orders_class_configuration={"A": 0.3, "B": 0.3, "C": 0.5}, # original
         quantity_range=[1, 12],  # Quantity range of number of SKU in each order
-        order_cycle_time=300,  # Number of order per hour
+        order_cycle_time=_order_cycle_time,  # orders/hour, scaled by DEMAND_LOAD_FACTOR_OVERRIDE
         order_period_time=9,
         order_start_arrival_time=0,
         date=1,

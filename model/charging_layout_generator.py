@@ -410,6 +410,21 @@ class ChargingLayoutGenerator:
         -------
         The unmodified matrix.
         """
+        # If the caller already supplied an explicit charger_positions list
+        # (e.g. for DoE runs that pin a fixed layout from a prior experiment),
+        # respect it verbatim instead of re-running the set-cover algorithm.
+        # Mirrors the same convention used by the picking-station pipeline
+        # (selective_picker_chargers + explicit) at line 881.
+        explicit = self.config.get("charger_positions") or []
+        if explicit:
+            self.config["num_chargers"] = len(explicit)
+            logger.info(
+                "Set Cover: respecting %d explicit charger position(s) "
+                "supplied by caller; skipping greedy set-cover computation.",
+                len(explicit),
+            )
+            return matrix
+
         # Universe: all cells robots can physically visit.
         universe: Set[Cell] = {
             (int(r), int(c))

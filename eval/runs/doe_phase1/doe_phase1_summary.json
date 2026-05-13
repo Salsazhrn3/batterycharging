@@ -1,0 +1,67 @@
+{
+  "horizon": 20000,
+  "num_chargers": 12,
+  "factors": {
+    "tau_low": [
+      15,
+      25
+    ],
+    "tau_full": [
+      60,
+      90
+    ],
+    "interrupt": [
+      0,
+      50
+    ],
+    "placements": [
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "runs": [
+    {
+      "id": "p3_lo15_fu60_int0",
+      "rc": 0,
+      "elapsed_min": 53.6
+    },
+    {
+      "id": "p3_lo15_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 52.9
+    },
+    {
+      "id": "p3_lo15_fu90_int0",
+      "rc": 0,
+      "elapsed_min": 51.9
+    },
+    {
+      "id": "p3_lo15_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 56.7
+    },
+    {
+      "id": "p3_lo25_fu60_int0",
+      "rc": 0,
+      "elapsed_min": 584.5
+    },
+    {
+      "id": "p3_lo25_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 54.9
+    },
+    {
+      "id": "p3_lo25_fu90_int0",
+      "rc": 0,
+      "elapsed_min": 781.1
+    },
+    {
+      "id": "p3_lo25_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 57.0
+    }
+  ],
+  "total_elapsed_min": 1692.6
+}

@@ -1,0 +1,267 @@
+{
+  "feasible_region_F": "NOT (19.5 <= tau_low <= 20.5 AND tau_full >= 89)",
+  "interrupt_fixed": "on@50% (BATTERY_INTERRUPT_PCT=50)",
+  "fits": {
+    "replenish_pct": {
+      "response": "replenish_pct",
+      "n_observations": 11,
+      "deadlock_excluded": [
+        "p3_lo20_fu90_int50",
+        "p3_lo20_fu92_int50"
+      ],
+      "coefficients": {
+        "intercept": 27.372443083894847,
+        "tau_low": 0.07755904650213988,
+        "tau_full": -0.11094939058240182,
+        "tau_low_sq": -0.04871557995822228,
+        "tau_full_sq": -0.05025506168332648,
+        "tau_low_x_tau_full": 0.1084360464226614
+      },
+      "r_squared": 0.8133125449663086,
+      "ss_residual": 0.04164855892117855,
+      "ss_total": 0.22309243496657155,
+      "unconstrained_optimum": {
+        "tau_low": 18.4,
+        "tau_full": 60.0,
+        "predicted": 27.438029577380767,
+        "in_feasible_region": true
+      },
+      "constrained_optimum": {
+        "tau_low": 18.4,
+        "tau_full": 60.0,
+        "predicted": 27.438029577380767
+      },
+      "design_points": [
+        {
+          "tau_low": 15,
+          "tau_full": 60,
+          "y": 27.423168048125763
+        },
+        {
+          "tau_low": 15,
+          "tau_full": 90,
+          "y": 27.035765288831538
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 60,
+          "y": 27.295893387553782
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 90,
+          "y": 27.358617866543298
+        },
+        {
+          "tau_low": 15,
+          "tau_full": 75,
+          "y": 27.173781518031966
+        },
+        {
+          "tau_low": 19,
+          "tau_full": 90,
+          "y": 27.140270312602073
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 60,
+          "y": 27.488363897458584
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 75,
+          "y": 27.36272346726268
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 88,
+          "y": 27.332767294892435
+        },
+        {
+          "tau_low": 21,
+          "tau_full": 90,
+          "y": 27.132753086806577
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 75,
+          "y": 27.459940932498096
+        }
+      ]
+    },
+    "orders": {
+      "response": "orders",
+      "n_observations": 11,
+      "deadlock_excluded": [
+        "p3_lo20_fu90_int50",
+        "p3_lo20_fu92_int50"
+      ],
+      "coefficients": {
+        "intercept": 1755.1924347615218,
+        "tau_low": -7.987096774193674,
+        "tau_full": 0.27637657562330553,
+        "tau_low_sq": -5.2340392446312105,
+        "tau_full_sq": -3.8458649712546853,
+        "tau_low_x_tau_full": -12.980645161290138
+      },
+      "r_squared": 0.8079873940178465,
+      "ss_residual": 282.7472901544475,
+      "ss_total": 1472.5454545454547,
+      "unconstrained_optimum": {
+        "tau_low": 15.0,
+        "tau_full": 90.0,
+        "predicted": 1767.356649056743,
+        "in_feasible_region": true
+      },
+      "constrained_optimum": {
+        "tau_low": 15.0,
+        "tau_full": 90.0,
+        "predicted": 1767.356649056743
+      },
+      "design_points": [
+        {
+          "tau_low": 15,
+          "tau_full": 60,
+          "y": 1745.0
+        },
+        {
+          "tau_low": 15,
+          "tau_full": 90,
+          "y": 1762.0
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 60,
+          "y": 1753.0
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 90,
+          "y": 1718.0
+        },
+        {
+          "tau_low": 15,
+          "tau_full": 75,
+          "y": 1759.0
+        },
+        {
+          "tau_low": 19,
+          "tau_full": 90,
+          "y": 1760.0
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 60,
+          "y": 1745.0
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 75,
+          "y": 1748.0
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 88,
+          "y": 1757.0
+        },
+        {
+          "tau_low": 21,
+          "tau_full": 90,
+          "y": 1752.0
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 75,
+          "y": 1747.0
+        }
+      ]
+    },
+    "consumed_mj": {
+      "response": "consumed_mj",
+      "n_observations": 11,
+      "deadlock_excluded": [
+        "p3_lo20_fu90_int50",
+        "p3_lo20_fu92_int50"
+      ],
+      "coefficients": {
+        "intercept": 75.5698245077808,
+        "tau_low": -0.18850928482275645,
+        "tau_full": 0.05670060395527752,
+        "tau_low_sq": 0.10160167480171904,
+        "tau_full_sq": -0.053838395064544686,
+        "tau_low_x_tau_full": -0.31171955610791735
+      },
+      "r_squared": 0.33610936351751153,
+      "ss_residual": 1.3202446405942356,
+      "ss_total": 1.988647780287017,
+      "unconstrained_optimum": {
+        "tau_low": 15.0,
+        "tau_full": 90.0,
+        "predicted": 76.17451723240391,
+        "in_feasible_region": true
+      },
+      "constrained_optimum": {
+        "tau_low": 15.0,
+        "tau_full": 90.0,
+        "predicted": 76.17451723240391
+      },
+      "design_points": [
+        {
+          "tau_low": 15,
+          "tau_full": 60,
+          "y": 75.30197252251823
+        },
+        {
+          "tau_low": 15,
+          "tau_full": 90,
+          "y": 75.72879662033522
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 60,
+          "y": 75.82304699546948
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 90,
+          "y": 75.00530685580459
+        },
+        {
+          "tau_low": 15,
+          "tau_full": 75,
+          "y": 76.42262265469641
+        },
+        {
+          "tau_low": 19,
+          "tau_full": 90,
+          "y": 76.1221020457684
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 60,
+          "y": 75.43714266173548
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 75,
+          "y": 75.07516345435474
+        },
+        {
+          "tau_low": 20,
+          "tau_full": 88,
+          "y": 75.2514509039578
+        },
+        {
+          "tau_low": 21,
+          "tau_full": 90,
+          "y": 75.91044057464721
+        },
+        {
+          "tau_low": 25,
+          "tau_full": 75,
+          "y": 75.49629622428903
+        }
+      ]
+    }
+  }
+}

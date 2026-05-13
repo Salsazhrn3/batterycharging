@@ -1,0 +1,72 @@
+{
+  "horizon": 20000,
+  "num_chargers": 12,
+  "runs": [
+    {
+      "id": "p3_lo15_fu75_int50",
+      "rc": 0,
+      "elapsed_min": 53.5
+    },
+    {
+      "id": "p3_lo25_fu75_int50",
+      "rc": 0,
+      "elapsed_min": 60.7
+    },
+    {
+      "id": "p3_lo20_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 60.1
+    },
+    {
+      "id": "p3_lo20_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 57.5
+    },
+    {
+      "id": "p3_lo20_fu75_int50",
+      "rc": 0,
+      "elapsed_min": 61.1
+    },
+    {
+      "id": "p1_lo20_fu75_int50",
+      "rc": 0,
+      "elapsed_min": 65.7
+    },
+    {
+      "id": "p1_lo20_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 57.6
+    },
+    {
+      "id": "p1_lo20_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 53.4
+    },
+    {
+      "id": "p2_lo20_fu75_int50",
+      "rc": 0,
+      "elapsed_min": 58.5
+    },
+    {
+      "id": "p2_lo20_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 55.9
+    },
+    {
+      "id": "p2_lo20_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 51.7
+    },
+    {
+      "id": "p2_lo25_fu55_int0",
+      "rc": 0,
+      "elapsed_min": 51.3
+    },
+    {
+      "id": "p2_lo25_fu65_int0",
+      "rc": 0,
+      "elapsed_min": 52.3
+    }
+  ],
+  "total_elapsed_min": 739.3
+}

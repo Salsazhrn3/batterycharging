@@ -188,6 +188,27 @@ def main() -> int:
     cfg = write_charger_overlay(workdir, args.pipeline, override_path=override_path)
     print(f"[run_one] overlay: {cfg.get('num_chargers')} chargers selected")
 
+    # Policy parameter overrides (Phase 2 DoE). cfg keys are read here and
+    # applied to the Robot class before setup() so the simulation uses them.
+    from model.robot import Robot
+    for key, attr in [
+        ("battery_low_pct", "BATTERY_LOW_PCT"),
+        ("battery_charged_pct", "BATTERY_CHARGED_PCT"),
+        ("battery_interrupt_pct", "BATTERY_INTERRUPT_PCT"),
+        ("initial_battery_frac", "INITIAL_BATTERY_FRAC"),
+    ]:
+        if key in cfg:
+            setattr(Robot, attr, float(cfg[key]))
+            print(f"[run_one] policy override: {attr} = {cfg[key]}")
+
+    # Phase 3 noise-factor overrides (fleet size, demand load).
+    if "num_robots" in cfg:
+        netlogo.NUM_ROBOTS_OVERRIDE = int(cfg["num_robots"])
+        print(f"[run_one] noise override: NUM_ROBOTS = {cfg['num_robots']}")
+    if "demand_load_factor" in cfg:
+        netlogo.DEMAND_LOAD_FACTOR_OVERRIDE = float(cfg["demand_load_factor"])
+        print(f"[run_one] noise override: DEMAND_LOAD_FACTOR = {cfg['demand_load_factor']}")
+
     t0 = time.time()
     setup_result = netlogo.setup()
     if isinstance(setup_result, str) and setup_result.startswith("An error"):

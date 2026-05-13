@@ -1,0 +1,305 @@
+\relax 
+\citation{wurman2008}
+\citation{boysen2019}
+\citation{lamballais2017}
+\citation{bischoff2025}
+\citation{kundu2023}
+\citation{baras2023}
+\citation{bischoff2025}
+\citation{deng2020}
+\citation{lin2023}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\newlabel{sec:intro}{{I}{1}{}{section.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-A}}The single-axis problem}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-B}}The case for joint optimisation}{1}{}\protected@file@percent }
+\citation{myers2016}
+\citation{myers2016}
+\citation{myers2016}
+\citation{kundu2023}
+\citation{baras2023}
+\citation{vis2006}
+\citation{dekoster2007}
+\citation{wang2014}
+\citation{wang2014}
+\citation{bischoff2025}
+\citation{shaukat2022}
+\citation{colling2019}
+\citation{ebben2001}
+\citation{bischoff2025}
+\citation{meyer2024}
+\citation{singh2022}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-C}}Contributions}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-D}}Outline}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{2}{}\protected@file@percent }
+\newlabel{sec:related}{{II}{2}{}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Charger placement for AMR/AGV systems}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Charging-strategy optimisation}{2}{}\protected@file@percent }
+\citation{lin2023}
+\citation{deng2020}
+\citation{mu2022}
+\citation{singh2024}
+\citation{bischoff2025}
+\citation{pfrommer2020}
+\citation{boysen2019}
+\citation{pfrommer2020}
+\citation{pfrommer2022}
+\citation{lamballais2017}
+\citation{montgomery2017}
+\citation{box2005}
+\citation{montgomery2017}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Three-phase methodology for joint placement-policy optimisation. Phase~1 screens 4 placements crossed with a $2^3$ policy factorial; the surviving placement is carried into Phase~2 face-centred CCD with the empirical deadlock manifold $\mathcal  {D}_{P3}$ excluded as an infeasibility constraint per Myers, Montgomery \& Anderson-Cook \cite  {myers2016}, \S  7.5. The constrained-RSM optimum then becomes one of two candidate policies evaluated in Phase~3 against a Taguchi $L_9(3^4)$ orthogonal array over four operational noise factors. The framework yields a CapEx-OpEx-procedural recommendation suitable for industrial deployment.}}{3}{}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:method_flow}{{1}{3}{}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Joint optimisation in warehouse design}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Design of Experiments in simulation studies}{3}{}\protected@file@percent }
+\citation{box1951}
+\citation{myers2016}
+\citation{khuri1996}
+\citation{box1951}
+\citation{myers2016}
+\citation{taguchi1986}
+\citation{phadke1989}
+\citation{ross1996}
+\citation{taguchi1986}
+\citation{phadke1989}
+\citation{kuhnle2019}
+\citation{pfrommer2020}
+\citation{kundu2023}
+\citation{baras2023}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}Research gap and positioning}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Proposed Placement Algorithms}{4}{}\protected@file@percent }
+\newlabel{sec:placement}{{III}{4}{}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Pipeline 1: Set Cover Approximation}{4}{}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces FINDNCS\_SC\_APPROX: Set Cover Approximation}}{4}{}\protected@file@percent }
+\newlabel{alg:set_cover}{{1}{4}{}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Pipeline 2: Affinity Propagation}{4}{}\protected@file@percent }
+\citation{baras2023}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces AP\_TRAFFIC\_CLUSTERING: Traffic Density Clustering}}{5}{}\protected@file@percent }
+\newlabel{alg:ap_cluster}{{2}{5}{}{algorithm.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Pipeline 3: Picking-Station Heuristic}{5}{}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {3}{\ignorespaces AP\_HOTSPOT\_PLACEMENT: Scoring and Selection}}{5}{}\protected@file@percent }
+\newlabel{alg:ap_placement}{{3}{5}{}{algorithm.3}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {4}{\ignorespaces OPPORTUNITY\_CHARGING: Picking Station Layout}}{5}{}\protected@file@percent }
+\newlabel{alg:picking}{{4}{5}{}{algorithm.4}{}}
+\citation{zakka2025}
+\citation{bischoff2025}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Pipeline 4: Perimeter Wall Strategy}{6}{}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {5}{\ignorespaces PERIMETER\_ISOLATION: Wall Strategy}}{6}{}\protected@file@percent }
+\newlabel{alg:perimeter}{{5}{6}{}{algorithm.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experimental Setup}{6}{}\protected@file@percent }
+\newlabel{sec:experiments}{{IV}{6}{}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Simulator}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Warehouse Configuration}{6}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Simulation parameters.}}{6}{}\protected@file@percent }
+\newlabel{tab:params}{{I}{6}{}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Robot and Energy Model}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Placement Pipelines (Treatments)}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Fleet Management and Preemption}{7}{}\protected@file@percent }
+\newlabel{sec:preemption}{{\mbox  {IV-E}}{7}{}{subsection.4.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-F}}Experimental Design}{7}{}\protected@file@percent }
+\newlabel{sec:design}{{\mbox  {IV-F}}{7}{}{subsection.4.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-G}}Extracted Metrics}{7}{}\protected@file@percent }
+\newlabel{sec:metrics}{{\mbox  {IV-G}}{7}{}{subsection.4.7}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-G}0a}Throughput Analysis ---}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-G}0b}Latency and Wait Times ---}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-G}0c}Energetic Efficiency ---}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-G}0d}Routing Congestion ---}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-G}0e}Fleet Viability (End-of-Run State) ---}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-G}0f}Energy Parity (Derived) ---}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-H}}Implementation Environment}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Results}{8}{}\protected@file@percent }
+\newlabel{sec:results}{{V}{8}{}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Long-horizon cross-pipeline comparison ($T = 100{,}000$\,s)}{8}{}\protected@file@percent }
+\newlabel{sec:r100k}{{\mbox  {V-A}}{8}{}{subsection.5.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-A}0a}Setup recap.}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-A}0b}Headline numbers.}{8}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Cross-pipeline comparison at $T = \SI {100000}{\second }$, $|C| = 12$, $N_r = 20$. \emph  {Replenish} is gained / consumed energy, the long-horizon viability metric. \emph  {Cons.} and \emph  {Gain.} are total fleet energy consumed and replenished, in megajoules. \emph  {$\eta _E$} is the cost-efficiency metric: consumed energy divided by completed orders, in kilojoules per order. P3 leads on $\eta _E$ by $\sim $17\,\% because its surviving subset of the fleet continues producing orders against the fixed base-drain overhead, dragging the per-order denominator down.}}{8}{}\protected@file@percent }
+\newlabel{tab:p100k}{{II}{8}{}{table.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Productivity-survival tradeoff at the $T = \SI {100000}{\second }$ horizon ($|C| = 12$, $N_r = 20$). Each marker is one placement pipeline. P2 (Affinity Propagation) retains the largest fleet; P3 (Picker-Tier) completes the most orders. P1 sits between them on both axes; P4 (Perimeter) is Pareto-dominated by every other pipeline.}}{8}{}\protected@file@percent }
+\newlabel{fig:tradeoff}{{2}{8}{}{figure.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-A}0c}Energy accounting.}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-A}0d}End-of-run states.}{8}{}\protected@file@percent }
+\newlabel{fig:survivorship}{{3a}{9}{}{subfigure.3.1}{}}
+\newlabel{sub@fig:survivorship}{{a}{9}{}{subfigure.3.1}{}}
+\newlabel{fig:throughput}{{3b}{9}{}{subfigure.3.2}{}}
+\newlabel{sub@fig:throughput}{{b}{9}{}{subfigure.3.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Two-axis breakdown of pipeline outcomes. P3 trades fleet integrity for productivity; P2 makes the opposite trade; P1 is intermediate; P4 is dominated.}}{9}{}\protected@file@percent }
+\newlabel{fig:two_axis}{{3}{9}{}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Fleet energy balance at $T = \SI {100000}{\second }$. Replenish ratios above each gain bar (49--53\,\%) confirm that twelve chargers are insufficient to break even on energy regardless of placement strategy.}}{9}{}\protected@file@percent }
+\newlabel{fig:energy_balance}{{4}{9}{}{figure.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces End-of-run robot state distribution. The dark \texttt  {dead} band consumes most of the P3 and P4 columns; P2 retains the deepest band of productive states.}}{9}{}\protected@file@percent }
+\newlabel{fig:states}{{5}{9}{}{figure.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-A}0e}Discussion.}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Charger-budget sweep ($T = 20{,}000$\,s, three pipelines)}{9}{}\protected@file@percent }
+\newlabel{sec:sweep}{{\mbox  {V-B}}{9}{}{subsection.5.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-B}0a}Motivation.}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-B}0b}Results.}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-B}0c}Discussion.}{9}{}\protected@file@percent }
+\citation{montgomery2017}
+\citation{box2005}
+\citation{montgomery2017}
+\citation{box1951}
+\citation{myers2016}
+\citation{khuri1996}
+\citation{box1951}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Charger-budget sweep at $T = \SI {20000}{\second }$, $N_r = 20$. P1 and P2 are essentially flat across budgets; P3 climbs from 23\,\% to a ceiling of 60\,\% at $|C| = 50$. The marginal return per added charger drops sharply beyond $|C| = 35$, indicating saturation of the picker-tier heuristic.}}{10}{}\protected@file@percent }
+\newlabel{tab:sweep}{{III}{10}{}{table.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Charger-budget sweep at $T = \SI {20000}{\second }$. \emph  {Left:} replenish ratio (energy gained / consumed) versus charger count. P1 and P2 remain below 3\,\% across the entire range; P3 rises monotonically from 23\,\% at $|C| = 5$ to a saturation ceiling of $60.2\,\%$ at $|C| = 50$, with marginal returns dropping sharply beyond $|C| = 35$. \emph  {Right:} orders completed; throughput is bounded by the picker-station capacity at this horizon (${\approx }1750$ orders) and does not separate the pipelines.}}{10}{}\protected@file@percent }
+\newlabel{fig:combined_sweep}{{6}{10}{}{figure.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Synthesis}{10}{}\protected@file@percent }
+\newlabel{sec:synthesis}{{\mbox  {V-C}}{10}{}{subsection.5.3}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-C}0a}Data and code availability.}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Joint Placement-Policy Optimisation (Phase 2: Constrained RSM)}{10}{}\protected@file@percent }
+\newlabel{sec:phase2}{{VI}{10}{}{section.6}{}}
+\citation{myers2016}
+\citation{myers2016}
+\citation{myers2016}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Methodological framework}{11}{}\protected@file@percent }
+\newlabel{sec:phase2_method}{{\mbox  {VI-A}}{11}{}{subsection.6.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VI-A}0a}Design of Experiments background.}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VI-A}0b}Phase 2 design choices.}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Phase~1 screening (4 placements $\times $ $2^3$ policy factorial)}{11}{}\protected@file@percent }
+\newlabel{sec:phase2_screening}{{\mbox  {VI-B}}{11}{}{subsection.6.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VI-B}0a}Pareto-domination criterion.}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VI-B}0b}Findings.}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VI-B}0c}Interpretation of the screening result.}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Response surface methodology with infeasibility constraint}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VI-C}0a}Methodological framing.}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VI-C}0b}Result.}{11}{}\protected@file@percent }
+\citation{taguchi1986}
+\citation{phadke1989}
+\citation{ross1996}
+\citation{taguchi1986}
+\citation{taguchi1986}
+\citation{ross1996}
+\citation{phadke1989}
+\citation{ross1996}
+\citation{phadke1989}
+\citation{taguchi1986}
+\citation{ross1996}
+\citation{taguchi1986}
+\citation{ross1996}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Fitted P3 quadratic response surface for replenish ratio with the empirical deadlock manifold $\mathcal  {D}_{P3}$ (red hatched region) excluded per the constrained-RSM framework of Myers, Montgomery \& Anderson-Cook \cite  {myers2016}, \S  7.5. White circles mark the eight clean CCD points used in the regression; the red cross marks the excluded deadlock cell at $(20, 90)$. The constrained optimum (gold star) lies in the feasible region; the constraint is not binding for the recommended policy.}}{12}{}\protected@file@percent }
+\newlabel{fig:rsm_surface}{{7}{12}{}{figure.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Robustness Analysis (Phase 3: Taguchi $L_9$)}{12}{}\protected@file@percent }
+\newlabel{sec:phase3}{{VII}{12}{}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Taguchi robust parameter design background}{12}{}\protected@file@percent }
+\newlabel{sec:taguchi_method}{{\mbox  {VII-A}}{12}{}{subsection.7.1}{}}
+\newlabel{eq:sn_lb}{{7}{12}{}{equation.7}{}}
+\newlabel{eq:sn_sb}{{8}{12}{}{equation.8}{}}
+\newlabel{eq:sn_nb}{{9}{12}{}{equation.9}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VII-A}0a}Orthogonal arrays.}{12}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VII-A}0b}Why Taguchi rather than full RSM over noise.}{12}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Phase 3 design specification}{12}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Two candidates}{12}{}\protected@file@percent }
+\citation{taguchi1986}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Standard Taguchi $L_9(3^4)$ orthogonal array \cite  {taguchi1986,ross1996}. Levels in our experiment: $A$ = demand load $\{0.7, 1.0, 1.3\}$, $B$ = fleet size $\{18, 20, 22\}$, $C$ = charger faults $\{0, 1, 2\}$, $D$ = initial battery $\{0.5, 0.7, 1.0\}$.}}{13}{}\protected@file@percent }
+\newlabel{tab:L9}{{IV}{13}{}{table.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Phase~3 Taguchi $L_9$ results. Robust dominates Peak on every aggregate metric --- mean orders, S/N ratio, deadlock count, worst-case throughput, and energy cost per completed order. The $\eta _E$ row in particular demonstrates that Peak's lower absolute energy consumption is illusory: deadlocked cells consume less energy only because robots stop moving, which simultaneously suppresses order completion, producing a worse cost-per-output ratio.}}{13}{}\protected@file@percent }
+\newlabel{tab:taguchi}{{V}{13}{}{table.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Signal-to-noise analysis}{13}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VII-D}0a}Headline result.}{13}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Phase 3 verdict --- the Phase~2 constrained-RSM optimum (Robust) dominates the Phase~1 best corner (Peak) on every aggregate metric across the $L_9$ noise envelope. Gold border marks the better candidate per panel.}}{13}{}\protected@file@percent }
+\newlabel{fig:robust_vs_peak}{{8}{13}{}{figure.8}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Per-noise-factor mean order count, Robust candidate. Initial battery is the dominant noise factor; demand, robots, and faults each produce variations within experimental noise.}}{13}{}\protected@file@percent }
+\newlabel{tab:noise_levels}{{VI}{13}{}{table.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-E}}Dominant noise factor: initial battery state}{13}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VII-E}0a}Managerial implication.}{13}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Discussion}{13}{}\protected@file@percent }
+\newlabel{sec:discussion}{{VIII}{13}{}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Why placement dominates budget by an order of magnitude}{13}{}\protected@file@percent }
+\newlabel{sec:mech_placement}{{\mbox  {VIII-A}}{13}{}{subsection.8.1}{}}
+\citation{myers2016}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Phase 3 Taguchi response graph: mean order count versus level for each of the four noise factors, comparing the Robust (blue) and Peak (red) candidates. The Robust candidate is essentially flat across demand, robots, and charger faults; both candidates show a strong response to initial battery state.}}{14}{}\protected@file@percent }
+\newlabel{fig:taguchi_response}{{9}{14}{}{figure.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Why initial battery state dominates the noise envelope}{14}{}\protected@file@percent }
+\newlabel{sec:mech_init_batt}{{\mbox  {VIII-B}}{14}{}{subsection.8.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Why constrained-RSM optimum dominates Phase~1 best corner}{14}{}\protected@file@percent }
+\newlabel{sec:mech_robust_wins}{{\mbox  {VIII-C}}{14}{}{subsection.8.3}{}}
+\citation{bischoff2025}
+\citation{bischoff2025}
+\citation{kundu2023}
+\citation{lin2023}
+\citation{deng2020}
+\citation{mu2022}
+\citation{singh2024}
+\citation{bischoff2025}
+\citation{bischoff2025}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-D}}Comparison with single-axis approaches}{15}{}\protected@file@percent }
+\newlabel{sec:vs_single_axis}{{\mbox  {VIII-D}}{15}{}{subsection.8.4}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-D}0a}Bischoff et al. \cite  {bischoff2025}}{15}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-D}0b}Kundu and Saha \cite  {kundu2023}}{15}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-E}}The role of reinforcement learning in joint optimisation}{15}{}\protected@file@percent }
+\newlabel{sec:rl_role}{{\mbox  {VIII-E}}{15}{}{subsection.8.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-E}0a}The case for RL in this domain.}{15}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-E}0b}Why this paper uses DoE/RSM/Taguchi instead.}{15}{}\protected@file@percent }
+\citation{bischoff2025}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-E}0c}Why this scoping choice does not undermine the conclusion.}{16}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-E}0d}Where RL fits in the future-work agenda.}{16}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-F}}Engineering Management interpretation: CapEx-OpEx framework}{16}{}\protected@file@percent }
+\newlabel{sec:capex_opex}{{\mbox  {VIII-F}}{16}{}{subsection.8.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-F}0a}(1) CapEx recommendation:}{16}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-F}0b}(2) OpEx recommendation:}{16}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-F}0c}(3) Operating-procedure recommendation:}{16}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-G}}Cost-per-order interpretation: energy as an operational expense}{16}{}\protected@file@percent }
+\newlabel{sec:cost_per_order}{{\mbox  {VIII-G}}{16}{}{subsection.8.7}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-G}0a}Short-horizon $\eta _E$ is placement-flat.}{16}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-G}0b}Long-horizon $\eta _E$ separates P3 from the others by 17\,\%.}{17}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-G}0c}Robust vs Peak inverts on energy cost too.}{17}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-G}0d}Implication for the managerial recommendation.}{17}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-H}}Mechanism analysis of deadlock and fleet depletion per pipeline}{17}{}\protected@file@percent }
+\newlabel{sec:mech_deadlock_depletion}{{\mbox  {VIII-H}}{17}{}{subsection.8.8}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-H}0a}Depletion mechanism (100k horizon).}{17}{}\protected@file@percent }
+\citation{bischoff2025}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-H}0b}Deadlock mechanism.}{18}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VIII-H}0c}Cross-pipeline pattern.}{18}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-I}}Implications for warehouse design beyond charging}{18}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Schematic illustration of the three observed deadlock mechanisms. The figure is conceptual (exact mid-run robot positions are not logged by the simulator); spatial relationships and arrows indicate the qualitative blocking structure that the run logs imply. \emph  {P1} (left): frequent low-trigger cycling on scattered storage chargers creates traffic on the same corridors as productive pod motion; mutual blocking arises because charging robots and pod-fetching robots compete for the same access paths. \emph  {P2} (centre): tight charge cycles with the interrupt disabled cause robots to occupy cluster cells for the full charging duration; cycles of mutual blocking form between cluster groups. \emph  {P3} (right): synchronisation resonance at $\tau _\text  {low}\approx 20\,\%$ causes near-simultaneous threshold crossings; the convergence wave on the picker-corridor cells is catastrophic because those cells double as productive-workflow cells.}}{19}{}\protected@file@percent }
+\newlabel{fig:deadlock_schematic}{{10}{19}{}{figure.10}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Limitations}{19}{}\protected@file@percent }
+\newlabel{sec:limitations}{{IX}{19}{}{section.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {X}Conclusion}{19}{}\protected@file@percent }
+\newlabel{sec:conclusion}{{X}{19}{}{section.10}{}}
+\bibcite{kundu2023}{1}
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces End-of-run battery distribution across the 20-robot fleet at $T = \SI {100000}{\second }$, $|C|=12$, one panel per placement pipeline. P3 and P4 exhibit a bimodal pattern with a heavy mass at $0\,\%$ (the 17/20 dead robots) and a small surviving subset at moderate state of charge; P1 and P2 are more dispersed with most of the fleet alive but at low battery (below $\tau _\text  {low}=20\,\%$). The pattern is consistent with the per-pipeline depletion mechanism analysis: scattered-charger placements (P1, P2) distribute charge access broadly but at low per-pass intensity, producing the spread; dwell-aligned (P3) and perimeter-isolated (P4) placements concentrate charge access either into a contested zone (P3) or behind a long round-trip (P4), producing the bimodal survival pattern.}}{20}{}\protected@file@percent }
+\newlabel{fig:depletion}{{11}{20}{}{figure.11}{}}
+\@writefile{toc}{\contentsline {section}{Appendix\nobreakspace  A: Phase 3 Taguchi $L_9$ Per-Cell Results}{20}{}\protected@file@percent }
+\newlabel{app:l9}{{A}{20}{}{section.Appendix.A}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {A-}0a}Observations from the per-cell data.}{20}{}\protected@file@percent }
+\bibcite{baras2023}{2}
+\bibcite{wang2014}{3}
+\bibcite{bischoff2025}{4}
+\bibcite{ebben2001}{5}
+\bibcite{colling2019}{6}
+\bibcite{shaukat2022}{7}
+\bibcite{kabir2018}{8}
+\bibcite{lin2023}{9}
+\bibcite{deng2020}{10}
+\bibcite{mu2022}{11}
+\bibcite{singh2024}{12}
+\bibcite{singh2022}{13}
+\bibcite{meyer2024}{14}
+\bibcite{wurman2008}{15}
+\bibcite{boysen2019}{16}
+\bibcite{lamballais2017}{17}
+\bibcite{dekoster2007}{18}
+\bibcite{vis2006}{19}
+\bibcite{pfrommer2020}{20}
+\bibcite{pfrommer2022}{21}
+\bibcite{montgomery2017}{22}
+\bibcite{box2005}{23}
+\bibcite{box1951}{24}
+\bibcite{myers2016}{25}
+\bibcite{khuri1996}{26}
+\bibcite{taguchi1986}{27}
+\bibcite{phadke1989}{28}
+\bibcite{ross1996}{29}
+\bibcite{kuhnle2019}{30}
+\bibcite{zakka2025}{31}
+\bibcite{haney1995}{32}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Phase~3 $L_9$ per-cell results, Robust candidate. ``DL'' is the operational deadlock indicator (Y if order completion ceased before $0.9 T$). All cells reached $T = \SI {20000}{\second }$, $|C|=12$, single seed.}}{21}{}\protected@file@percent }
+\newlabel{tab:l9_robust}{{VII}{21}{}{table.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Phase~3 $L_9$ per-cell results, Peak candidate. The Peak candidate accumulates $4$ deadlock cells (vs $2$ for Robust) and a worst-case throughput of only $325$ orders --- approximately $4{\times }$ worse than Robust's worst case.}}{21}{}\protected@file@percent }
+\newlabel{tab:l9_peak}{{VIII}{21}{}{table.8}{}}
+\@writefile{toc}{\contentsline {section}{References}{21}{}\protected@file@percent }
+\gdef \@abspage@last{21}

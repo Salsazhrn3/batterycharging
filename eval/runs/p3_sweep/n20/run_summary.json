@@ -1,10 +1,17 @@
 {
   "pipeline": 3,
   "horizon": 20000,
-  "setup_seconds": 7.17,
-  "tick_seconds": 2224.28,
-  "ticks_per_second": 9.0,
-  "tick_result": "An error occurred. See the details above.",
+  "setup_seconds": 9.88,
+  "tick_seconds": 2975.23,
+  "ticks_per_second": 6.7,
+  "tick_result": {
+    "status": "done",
+    "final_tick": 20000.10000000703,
+    "total_energy": 39598476.13182262,
+    "pending_jobs": 17,
+    "stop_and_go": 59053,
+    "total_turning": 46250
+  },
   "num_robots": 20,
   "num_chargers": 20,
   "charger_positions": [
