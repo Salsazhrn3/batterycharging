@@ -1,8 +1,8 @@
 # Thesis Handover — Joint Placement-Policy Optimisation for RMFS Charging
 
-**Last updated:** 2026-05-08 (handover written), updated 2026-05-13 (Phase 4 Week 1)
+**Last updated:** 2026-05-08 (handover written), updated 2026-05-13 (Phase 4 Week 1), 2026-05-14 (Phase 4 Week 2)
 **Author of this handover:** Claude (working with Salsa Zahrani)
-**Status:** Phases 1–3 complete and written into the paper. Phase 4 (RL extension) Week 1 complete on the current Windows laptop; Weeks 2–8 planned for the new dedicated device.
+**Status:** Phases 1–3 complete and written into the paper. Phase 4 (RL extension) Week 1 complete on Windows laptop; Week 2 complete on the macOS dev box (2026-05-14); Weeks 3–8 still pending.
 
 This file gives a new Claude Code session (on any device) the context it needs to continue the thesis without re-deriving everything from scratch.
 
@@ -100,7 +100,7 @@ Adding a new override key requires editing the loop in `run_one.py` around line 
 | Week | Deliverable | Status |
 |---|---|---|
 | 1 | `gym.Env` wrapper around the simulator; smoke test | **DONE** 2026-05-13 |
-| 2 | Patch `deliver_quantity` `NoneType` simulator bug; migrate `rl_env.py` to per-AMR-per-event decision granularity (full Bischoff design) | pending |
+| 2 | Patch `deliver_quantity` `NoneType` simulator bug; migrate `rl_env.py` to per-AMR-per-event decision granularity (full Bischoff design) | **DONE** 2026-05-14 |
 | 3 | Train PPO on P3 with CRSM optimum as warm-start | pending |
 | 4 | Train PPO on P1 and P2 (sequential) | pending |
 | 5 | Train PPO on P4; rerun any failed-training attempts | pending |
@@ -114,13 +114,18 @@ Adding a new override key requires editing the loop in `run_one.py` around line 
 - `eval/verify_rl_env.py` — runs `stable_baselines3.check_env()` then a tiny `MaskablePPO` training (32 timesteps, 2 gradient updates) to validate the training loop end-to-end. Both checks passed on 2026-05-13 in 35.9 s; toy model saved to `eval/results/ppo_toy.zip`.
 - Dependencies installed in the current Windows venv: `gymnasium 1.2.3`, `stable-baselines3 2.8.0`, `sb3-contrib 2.8.0` (torch + numpy were already present).
 
-**Critical Week 2 task: patch the `deliver_quantity` `NoneType` bug.** During the toy training, random-action exploration triggered an existing simulator exception:
-```
-[ERROR] finish_picking_task for job <built-in function id>
-[ERROR] for pod Pod(19) location (2,18)
-[rl_env] simulator exception: 'NoneType' object has no attribute 'deliver_quantity'
-```
-The `_tick_until_manual` wrapper in `rl_env.py` already catches this and ends the episode gracefully, so training continues — but premature episode termination slows learning. Locate the offending code path (likely in `model/inventory.py` near `finish_picking_task`) and patch the `None` dereference before scaling up PPO training in Week 3.
+**Week 2 (completed 2026-05-14) artefacts:**
+
+- `model/inventory.py:finish_picking_task` — `order_id` lookups that miss `OrderManager.order_id_to_order` now log `[WARN]` and `continue` instead of dereferencing `None`. Root cause is that preassigned/database-loaded rows occasionally bypass `OrderManager.add_order`, so the dict returns `None`; the patch is defensive (the SKU delivery for that order is skipped, but the trip, pod return, and job-finish all still record).
+- `eval/rl_env.py` rewritten for per-AMR-per-event decisions:
+  - Detects busy → idle transitions per robot each tick (`BUSY_STATES = {taking_pod, delivering_pod, returning_pod, station_processing, going_to_charge}`) and queues them.
+  - Each Gym step handles exactly one robot's decision; the simulator only advances when the queue is empty (`_advance_until_event`).
+  - Action applied per-AMR via Python instance-attribute shadowing of `Robot.BATTERY_LOW_PCT` / `BATTERY_CHARGED_PCT`. Action 0 sets `BATTERY_LOW_PCT = 0` (suppress auto-charge); action k > 0 sets `BATTERY_CHARGED_PCT = k`, calls `robot._start_charging_trip()` immediately, and clears `BATTERY_LOW_PCT` so the *next* idle transition re-defers to the agent.
+  - 15-dim observation now includes per-AMR focus features: focus battery, Manhattan distance to nearest free charger, focus-dead indicator, plus the global fleet features from Week 1.
+  - Reward is per-decision: `Δorders_since_last_step − 5·I(focus_just_died) + 0.5·n_free/N`.
+  - Action mask: target ≤ focus robot's current battery is illegal; action 0 is always legal.
+- Smoke tests: `check_env` PASS in 14.3 s, MaskablePPO toy training (32 steps, n_steps=16) PASS in 4.9 s on the macOS dev box (2026-05-14). Toy model written to `eval/results/ppo_toy.zip`.
+- Note for Week 3: at simulator t=0 every robot is idle simultaneously, so the first ~20+ decisions are issued without advancing simulator time. Real training advances time once those initial decisions are consumed; budget compute against decision count, not wall-clock per `model.learn(N)`.
 
 **Out of scope (deliberately):**
 - Multiple non-RL policy classes

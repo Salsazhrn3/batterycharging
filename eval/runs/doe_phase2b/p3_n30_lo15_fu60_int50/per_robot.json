@@ -1,0 +1,162 @@
+[
+  {
+    "robot_id": 1519,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4416708.568898225,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1520,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4016087.478605887,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1521,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4326512.380707777,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1522,
+    "battery_level_j": 512056.997286438,
+    "battery_pct": 7.902114155654908,
+    "energy_consumption_j": 4196025.744169226,
+    "current_state": "delivering_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1523,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4250491.27085971,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1524,
+    "battery_level_j": 527711.7390590736,
+    "battery_pct": 8.143699676837555,
+    "energy_consumption_j": 4494553.70093389,
+    "current_state": "idle",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1525,
+    "battery_level_j": 543784.4257099638,
+    "battery_pct": 8.391734964659934,
+    "energy_consumption_j": 4384659.777653834,
+    "current_state": "delivering_pod",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1526,
+    "battery_level_j": 473278.9825221482,
+    "battery_pct": 7.3036880018850034,
+    "energy_consumption_j": 4435619.457466973,
+    "current_state": "idle",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1527,
+    "battery_level_j": 2774570.1060035583,
+    "battery_pct": 42.817439907462315,
+    "energy_consumption_j": 4484721.178588038,
+    "current_state": "going_to_charge",
+    "is_charging": true
+  },
+  {
+    "robot_id": 1528,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4330414.813738576,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1529,
+    "battery_level_j": 455763.447174639,
+    "battery_pct": 7.033386530472824,
+    "energy_consumption_j": 4189360.4111740333,
+    "current_state": "idle",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1530,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4240718.621860481,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1531,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4432663.225644051,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1532,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4411520.350109994,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1533,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4362787.880040906,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1534,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4474633.723429176,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1535,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4634081.861274359,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1536,
+    "battery_level_j": 535140.8820900093,
+    "battery_pct": 8.258346945833477,
+    "energy_consumption_j": 4442705.005056417,
+    "current_state": "idle",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1537,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 4363013.613159681,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1538,
+    "battery_level_j": 2829249.9230992887,
+    "battery_pct": 43.66126424535939,
+    "energy_consumption_j": 4543612.215083075,
+    "current_state": "going_to_charge",
+    "is_charging": true
+  }
+]

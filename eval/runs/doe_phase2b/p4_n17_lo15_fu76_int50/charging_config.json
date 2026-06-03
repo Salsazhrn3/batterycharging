@@ -1,0 +1,1 @@
+{"pipeline": 4, "num_chargers": 17, "disable_active_charging": false, "battery_low_pct": 15, "battery_charged_pct": 76, "battery_interrupt_pct": 50, "initial_battery_frac": 1.0, "charger_positions": [[0, 43], [1, 43], [3, 43], [4, 43], [6, 43], [7, 43], [9, 43], [11, 43], [16, 43], [18, 43], [19, 43], [21, 43], [23, 43], [24, 43], [26, 43], [27, 43], [29, 43]]}

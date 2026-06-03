@@ -1,0 +1,162 @@
+[
+  {
+    "robot_id": 1519,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2883336.752066262,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1520,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2894642.4130765675,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1521,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2841730.510206077,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1522,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2778879.1894629463,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1523,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2803161.913793031,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1524,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2908860.033678083,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1525,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2865339.3018244216,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1526,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2787444.8928887313,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1527,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2819677.825462783,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1528,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2839419.0822947007,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1529,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2769610.985247022,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1530,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2906022.244208458,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1531,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2800319.3837786233,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1532,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2840465.133137474,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1533,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2799490.2887705257,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1534,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2798652.825946029,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1535,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2707912.010259858,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1536,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2887640.715223045,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1537,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2869208.6954406276,
+    "current_state": "dead",
+    "is_charging": false
+  },
+  {
+    "robot_id": 1538,
+    "battery_level_j": 0.0,
+    "battery_pct": 0.0,
+    "energy_consumption_j": 2861601.5128070177,
+    "current_state": "dead",
+    "is_charging": false
+  }
+]

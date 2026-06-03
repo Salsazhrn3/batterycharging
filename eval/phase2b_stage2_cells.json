@@ -1,0 +1,25 @@
+[
+  {"placement": 1, "num_chargers": 3,  "tau_low": 21, "tau_full": 82, "interrupt": 50},
+  {"placement": 1, "num_chargers": 8,  "tau_low": 21, "tau_full": 82, "interrupt": 50},
+  {"placement": 1, "num_chargers": 13, "tau_low": 21, "tau_full": 82, "interrupt": 50},
+  {"placement": 1, "num_chargers": 17, "tau_low": 21, "tau_full": 82, "interrupt": 50},
+  {"placement": 1, "num_chargers": 20, "tau_low": 21, "tau_full": 82, "interrupt": 50},
+
+  {"placement": 2, "num_chargers": 3,  "tau_low": 15, "tau_full": 90, "interrupt": 50},
+  {"placement": 2, "num_chargers": 8,  "tau_low": 15, "tau_full": 90, "interrupt": 50},
+  {"placement": 2, "num_chargers": 13, "tau_low": 15, "tau_full": 90, "interrupt": 50},
+  {"placement": 2, "num_chargers": 17, "tau_low": 15, "tau_full": 90, "interrupt": 50},
+  {"placement": 2, "num_chargers": 20, "tau_low": 15, "tau_full": 90, "interrupt": 50},
+
+  {"placement": 3, "num_chargers": 3,  "tau_low": 17, "tau_full": 60, "interrupt": 50},
+  {"placement": 3, "num_chargers": 8,  "tau_low": 17, "tau_full": 60, "interrupt": 50},
+  {"placement": 3, "num_chargers": 13, "tau_low": 17, "tau_full": 60, "interrupt": 50},
+  {"placement": 3, "num_chargers": 17, "tau_low": 17, "tau_full": 60, "interrupt": 50},
+  {"placement": 3, "num_chargers": 20, "tau_low": 17, "tau_full": 60, "interrupt": 50},
+
+  {"placement": 4, "num_chargers": 3,  "tau_low": 15, "tau_full": 76, "interrupt": 50},
+  {"placement": 4, "num_chargers": 8,  "tau_low": 15, "tau_full": 76, "interrupt": 50},
+  {"placement": 4, "num_chargers": 13, "tau_low": 15, "tau_full": 76, "interrupt": 50},
+  {"placement": 4, "num_chargers": 17, "tau_low": 15, "tau_full": 76, "interrupt": 50},
+  {"placement": 4, "num_chargers": 20, "tau_low": 15, "tau_full": 76, "interrupt": 50}
+]

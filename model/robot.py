@@ -1348,7 +1348,7 @@ class Robot(Object):
             # Soft-fail: release the assignment so the FMS can retry next tick
             # rather than crashing the entire simulation when one robot fails
             # to find a route (e.g., a dead robot blocking the only aisle).
-            print(f"[WARN] soft-fail: releasing job {self.job.job_id} from robot {self.robotID()}")
+            print(f"[WARN] soft-fail: releasing job {self.job.job_id} from robot {self.robotID(self.robotName())}")
             self.warehouse.job_queue.append(self.job)
             self.job = None
             self.current_state = "idle"

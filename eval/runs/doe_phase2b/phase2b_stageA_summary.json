@@ -1,0 +1,75 @@
+{
+  "stage": "A",
+  "horizon": 100000,
+  "factor_levels": {
+    "num_chargers": [
+      6,
+      18,
+      30
+    ],
+    "tau_low": [
+      15,
+      20,
+      25
+    ],
+    "tau_full": [
+      60,
+      75,
+      90
+    ],
+    "placements": [
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "fixed": {
+    "interrupt": 50,
+    "initial_battery_frac": 1.0,
+    "disable_active_charging": false
+  },
+  "runs": [
+    {
+      "id": "p1_n6_lo15_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 203.6
+    },
+    {
+      "id": "p1_n6_lo20_fu75_int50",
+      "rc": 0,
+      "elapsed_min": 157.5
+    },
+    {
+      "id": "p1_n18_lo20_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 196.9
+    },
+    {
+      "id": "p2_n6_lo25_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 200.2
+    },
+    {
+      "id": "p2_n18_lo20_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 193.4
+    },
+    {
+      "id": "p4_n6_lo25_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 228.0
+    },
+    {
+      "id": "p4_n6_lo25_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 319.4
+    },
+    {
+      "id": "p4_n18_lo20_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 213.4
+    }
+  ],
+  "total_elapsed_h": 28.54
+}

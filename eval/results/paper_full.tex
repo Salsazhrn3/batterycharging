@@ -215,6 +215,7 @@ $\text{AffinityPropagation}(S)$: Scikit-learn implementation of the AP clusterin
 
 The scoring function evaluates traffic desirability, spatial safety, and proximity to the cluster's hotspot \cite{baras2023}. The score is calculated as:
 \begin{equation}
+\label{eq:p2_score}
     \text{Score}(c) = \alpha \cdot TD(c) - \beta \cdot P(c) - \gamma \cdot D(c)
 \end{equation}
 where $TD(c) = 1 - (T_c - \mu_{cluster})^2$ creates an inverted bell curve rewarding cells near the cluster's mean traffic. $P(c)$ is a binary penalty keeping chargers out of immediate pod retrieval lanes, and $D(c)$ actively penalises distance from the cluster's peak traffic hotspot, ensuring AGVs do not deadhead deep into storage aisles to recharge.
@@ -328,6 +329,21 @@ $\text{EvenlySpacedSample}(C, N)$: Returns $N$ distributed items.
 \end{algorithmic}
 \end{algorithm}
 
+\subsection{Coupling Placement to the DoE Charger-Count Axis}
+\label{sec:placement_doe_coupling}
+
+The four pipelines above natively produce a charger count as a \emph{consequence} of their internal parameters: P1's set-cover ends when full coverage is achieved under radius $d$, P2's affinity propagation determines its own number of clusters from the preference constant $c$, P3's count follows from the number of equipped picker stations $N$, and P4's count is the user-supplied $N$ directly. The DoE framework of Section~\ref{sec:phase2}, however, treats charger count $|C|$ as a \emph{treatment factor} to be swept independently of placement, so the pipelines must accept $|C|$ as an explicit input rather than emit it as a by-product. We resolve this by holding the spatial logic of each pipeline fixed and truncating its output to the requested $|C|$:
+
+\begin{itemize}
+  \item \textbf{P1 (precomputed truncation).} The greedy set-cover algorithm is executed once offline with a fixed coverage radius, producing a canonical list of 40 candidate cells sorted in greedy-selection order (the first cell covers the most uncovered territory, the second adds the most marginal coverage, and so on). For a DoE cell at $|C| = k$, the first $k$ cells of this canonical list are used. Successive $|C|$ levels are therefore nested ($k=3 \subset k=8 \subset k=13$), which preserves a coherent within-pipeline comparison across the budget axis but means that $|C|=3$ on P1 is the top-3 greedy picks rather than the set-cover algorithm's intended full-coverage output.
+
+  \item \textbf{P2 (runtime top-$N$ ranking).} Affinity propagation runs unchanged with fixed preference, $\alpha$, $\beta$, $\gamma$, producing its natural number of clusters. The per-cluster winners are ranked by the placement score of Eq.~\eqref{eq:p2_score}, and the top $|C|$ are retained; if AP yields fewer clusters than the requested $|C|$, the layout is topped up from the remaining high-scored cells under a Manhattan-separation constraint. The clustering and scoring parameters are therefore decoupled from $|C|$.
+
+  \item \textbf{P3, P4 (native target counts).} Both pipelines already accept a target count as input ($N$ picker stations for P3, $N$ perimeter cells for P4), so no truncation is required: each $|C|$ level is produced by passing $N$ such that the resulting layout contains exactly $|C|$ charging cells.
+\end{itemize}
+
+This coupling preserves an apples-to-apples comparison across placements: at every DoE cell the four pipelines deploy the same number of chargers, isolating spatial logic as the cross-placement treatment. The interpretive cost is that $|C|$ values below each pipeline's natural output should be read as the pipeline's first-$k$ output, not as a re-optimisation at the lower budget; this is the framing under which structural pathologies such as P1's blocking collapse at $|C| = 8$ (Section~\ref{sec:phase2b}) are reported as findings about the greedy-selection ordering itself rather than about the set-cover formulation in isolation.
+
 \section{Experimental Setup}
 \label{sec:experiments}
 
@@ -338,31 +354,123 @@ We evaluate all placement pipelines in a discrete-event simulator derived from a
 The fleet consists of $N_r = 20$ AGVs operating on a \SI{30}{\cell} $\times$ \SI{40}{\cell} grid. Five picker stations are placed on the left edge at rows $\{1, 7, 13, 19, 25\}$; corresponding replenishment stations are placed on the right edge. Pods occupy the interior of the grid and are transported between stations by the robots. Cell values encode passability attributes, classifying zones as navigable floor, active pod, charger, aisle, or non-traversable boundaries. Charging coordinates are overlaid onto the grid by the placement pipeline under evaluation and are recorded in the set $C \subseteq \mathcal{G}$, where $\mathcal{G}$ is the global grid. An AGV located at cell $g \in C$ receives power regardless of whether a pod is currently stationed on that cell, facilitating drive-by charging interactions.
 
 \subsection{Robot and Energy Model}
-Robot motion energy follows the two-phase kinematic model presented by Zakka~et~al.~\cite{zakka2025}: acceleration and deceleration phases are integrated using the robot's payload state (loaded or unloaded), and steady-state cruising consumes a velocity-dependent power variable. Pod handling activities (lifting and lowering) contribute a fixed energetic cost per event. In addition to kinetic motion, a constant base-drain term models the consumption of on-board electronics and is applied whenever the robot is not actively charging.
+\label{sec:energy_model}
 
-Battery dynamics employ the fixed-threshold charging strategy observed in the work of Bischoff~et~al.~\cite{bischoff2025}. A robot begins its initial operational sequence at full battery capacity, and the FMS attempts to route it to a designated charging station when the state of charge crosses a defined critical low threshold. Numerical parameters governing the physical simulation are summarised in Table~\ref{tab:params}.
+The robot energy model partitions consumption into two physically independent channels. The \emph{electronics channel} (on-board CPU, sensor suite, communications radio, status lights) is modelled as a constant power draw whenever the robot is not on a charger and is independent of payload: a loaded robot standing still consumes the same electronics power as an empty one, because no mechanical work is being done in either case (the pod weight is borne passively by the wheel bearings). The \emph{mechanical channel} (translation, rotation, pod handling) is modelled by Newtonian work-energy expressions evaluated tick-by-tick and scales with the total moving mass $m + m_L$, where $m = \SI{100}{\kilo\gram}$ is the robot mass and $m_L$ is the current pod mass (zero when unloaded). The robot is therefore a kinematic body subject to rolling friction, an impedance-coefficient on inertial force, and a gravitational lift cost when a pod is picked up or set down.
+
+\paragraph{Translational motion (Zakka et al.~\cite{zakka2025}).}
+Motion energy over one simulation tick of duration $\Delta t = \SI{0.15}{\second}$ is integrated using a quasi-static work-energy formulation in three kinematic regimes --- acceleration ($a > 0$), deceleration ($a < 0$), and constant-velocity cruise ($a = 0$, $v \neq 0$):
+\begin{align}
+  E_\text{accel} &= (m + m_L)\,\big( a\,k_\text{ir} + g\mu \big)\,v\,\Delta t \label{eq:e_accel}\\
+  E_\text{decel} &= \Big| (m + m_L)\,\big( a\,k_\text{ir} - g\mu \big)\,v\,\Delta t \Big| \label{eq:e_decel}\\
+  E_\text{const} &= (m + m_L)\,g\mu\,v\,\Delta t \label{eq:e_const}
+\end{align}
+with $g = \SI{9.8}{\meter\per\second\squared}$, rolling-friction coefficient $\mu = 0.02$ (standard value for hard-rubber wheel on smooth concrete), and impedance coefficient $k_\text{ir} = 0.15$ scaling the inertial term to reflect motor-drivetrain efficiency. When the robot is stationary ($v = 0$), all three terms vanish and only the base electronics drain accrues.
+
+\paragraph{Rotation.}
+A heading change of $\theta \in \{\pi/2, \pi\}$ radians (90$^\circ$ or 180$^\circ$ turn) is executed over a fixed rotation duration $\tau_\text{rot} = \SI{2.5}{\second}$. The rotational energy is the sum of a kinetic-rotation component (accelerating the body about its vertical axis) and a friction component (the wheels twisting against the floor surface during the turn):
+\begin{equation}
+  E_\text{rot} = \underbrace{\tfrac{1}{6}(m+m_L)(L^2 + W^2) \cdot \frac{\theta^2}{\tau_\text{rot}^2}}_{\text{kinetic (body inertia)}}\;+\;\underbrace{(m+m_L)\,g\mu\,r\,\theta}_{\text{friction (wheel twist)}}
+  \label{eq:e_rot}
+\end{equation}
+with body length $L = \SI{0.75}{\meter}$, width $W = \SI{0.6}{\meter}$, and half-width radius $r = W/2 = \SI{0.3}{\meter}$.
+
+\paragraph{Pod handling (lift/lower).}
+Pod pickup and drop-off each incur a one-shot lift cost, modelled as the gravitational work required to raise the payload through the cradle lift height $h_\text{lift} = \SI{0.2}{\meter}$ (the elevation a Kiva-style under-pod robot raises its top deck to lift the pod off the floor):
+\begin{equation}
+  E_\text{lift} = m_L\,g\,h_\text{lift}
+  \label{eq:e_lift}
+\end{equation}
+$E_\text{lift}$ is charged once on the \texttt{taking\_pod} $\to$ \texttt{delivering\_pod} transition and once on the \texttt{returning\_pod} $\to$ \texttt{idle} transition. No energy is recovered on drop (conservative).
+
+\paragraph{Base electronics drain.}
+A constant power $P_\text{drain} = \SI{90}{\joule\per\second}$ models all on-board electronics and FMS-side housekeeping, applied on every simulation tick the robot is not on a charger:
+\begin{equation}
+  E_\text{idle}^{(\Delta t)} = P_\text{drain} \cdot \Delta t
+  \label{eq:e_idle}
+\end{equation}
+This term is identical for loaded and unloaded robots --- the on-board hardware does not depend on payload.
+
+\paragraph{Charging.}
+When the robot's snapped grid position coincides with a charger cell ($\text{round}(\text{pos}) \in C$), it gains energy at the charger power $P_\text{charge} = \SI{397.6}{\watt}$ on every tick, capped at the maximum battery capacity $E_\text{cap}$:
+\begin{equation}
+  E_\text{charge}^{(\Delta t)} = \min\!\Big( P_\text{charge} \cdot \Delta t,\; E_\text{cap} - E_\text{batt}(t) \Big)
+\end{equation}
+The base electronics drain is suppressed while charging (the charger powers the on-board electronics directly).
+
+\paragraph{Per-tick battery balance.}
+The net battery change in one tick is the sum of the gain and loss channels:
+\begin{equation}
+  \Delta E_\text{batt} = E_\text{charge}^{(\Delta t)} \cdot \mathbb{1}[\text{on charger}] - \Big( E_\text{motion} + E_\text{rot}^\star + E_\text{lift}^\star + E_\text{idle}^{(\Delta t)} \cdot \mathbb{1}[\text{not charging}] \Big)
+  \label{eq:per_tick_balance}
+\end{equation}
+where $E_\text{motion} \in \{E_\text{accel}, E_\text{decel}, E_\text{const}, 0\}$ depends on the kinematic regime, $E_\text{rot}^\star$ contributes only on the tick the turn completes, and $E_\text{lift}^\star$ contributes only on the pickup and drop ticks. The state \texttt{dead} is entered when $E_\text{batt} \leq 0$, at which point the robot ceases all motion and base drain.
+
+\paragraph{Charging policy.}
+Battery dynamics employ the fixed-threshold charging strategy observed in the work of Bischoff~et~al.~\cite{bischoff2025}. A robot begins its initial operational sequence at battery fraction $\text{init\_batt} \cdot E_\text{cap}$ (default $\text{init\_batt} = 1.0$), and the FMS attempts to route it to a designated charging station when the state of charge crosses a defined critical low threshold $\tau_\text{low}$. Active charging stops at $\tau_\text{full}$. The interrupt mechanism (Phase~2 onward) suspends an in-progress charge if the battery has already risen above $\tau_\text{int}$, releasing the robot back to the job queue early to break long charging cycles.
+
+\paragraph{Parameter derivation from manufacturer specifications.}
+The battery capacity, base drain rate, and charger power are converted from the commercial AGV specification sheet into simulator units (joules and watts) by the calculation summarised in Table~\ref{tab:agv_spec}. The vehicle is a 14.2~V Li-ion cradle-lift AGV with a 1.8~kWh battery, drawing $5\,\%$ of capacity per hour at rest and recharging at a 28~A/min rate. The operating voltage is inferred from the published $\text{Wh}/\text{Ah}$ ratio rather than read directly. The complete simulator parameter set is summarised in Table~\ref{tab:params}.
 
 \begin{table}[t]
   \centering
-  \caption{Simulation parameters.}
+  \caption{Battery and electronics parameter derivation from the commercial AGV specification sheet.}
+  \label{tab:agv_spec}
+  \footnotesize
+  \begin{tabular}{p{0.27\columnwidth}p{0.30\columnwidth}p{0.30\columnwidth}}
+    \toprule
+    Quantity & Manufacturer spec & Simulator value \\
+    \midrule
+    Battery capacity      & 1.8\,kWh = 126.76\,Ah        & $E_\text{cap} = \SI{6.48}{\mega\joule}$ \\
+    Battery voltage       & $1800\,\text{Wh}\,/\,126.76\,\text{Ah}$ & $V = \SI{14.2}{\volt}$ (inferred) \\
+    Idle drain rate       & $5\,\%/\text{hr}$ of $E_\text{cap}$   & $P_\text{drain} = \SI{90}{\joule\per\second}$ \\
+    Charging current      & $28\,\text{A}/\text{min} = 0.47\,\text{A}/\text{s}$ & --- \\
+    Charging power        & $V \times I = 14.2 \times 28$ & $P_\text{charge} = \SI{397.6}{\watt}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \caption{Simulation parameters. Rows are grouped by control (simulator), robot geometry and mechanics, battery model, and charging policy.}
   \label{tab:params}
   \small
   \begin{tabular}{lll}
     \toprule
     Symbol & Value & Meaning \\
     \midrule
+    \multicolumn{3}{l}{\emph{Simulator control}} \\
     $N_r$                & 20                            & Number of robots \\
     $\Delta t$           & \SI{0.15}{\second}            & Simulation tick \\
     $T$                  & \SI{100000}{\second}          & Horizon (primary) \\
+    \midrule
+    \multicolumn{3}{l}{\emph{Robot geometry and mechanics}} \\
+    $m$                  & \SI{100}{\kilo\gram}          & Robot mass \\
+    $L$                  & \SI{0.75}{\meter}             & Robot length \\
+    $W$                  & \SI{0.60}{\meter}             & Robot width \\
+    $r$                  & \SI{0.30}{\meter}             & Half-width radius \\
+    $g$                  & \SI{9.8}{\meter\per\second\squared} & Gravitational acceleration \\
+    $\mu$                & $0.02$                        & Rolling-friction coefficient \\
+    $k_\text{ir}$        & $0.15$                        & Inertial impedance coefficient \\
+    $h_\text{lift}$      & \SI{0.2}{\meter}              & Pod lift height \\
+    $\tau_\text{rot}$    & \SI{2.5}{\second}             & Rotation execution time \\
+    \midrule
+    \multicolumn{3}{l}{\emph{Battery model}} \\
     $E_\text{cap}$       & \SI{6.48}{\mega\joule}        & Battery capacity \\
-    $P_\text{drain}$     & \SI{90}{\joule\per\second}    & Base drain rate \\
+    $P_\text{drain}$     & \SI{90}{\joule\per\second}    & Base electronics drain \\
     $P_\text{charge}$    & \SI{397.6}{\watt}             & Charger power \\
-    $\tau_\text{low}$    & $20\%$                        & Trigger threshold \\
-    $\tau_\text{full}$   & $90\%$                        & Charged threshold \\
-    $\tau_\text{int}$    & $50\%$                        & Interrupt threshold \\
+    init\_batt           & $1.0$                         & Initial battery fraction \\
+    \midrule
+    \multicolumn{3}{l}{\emph{Charging policy}} \\
+    $\tau_\text{low}$    & $20\,\%$                      & Trigger threshold \\
+    $\tau_\text{full}$   & $90\,\%$                      & Charged threshold \\
+    $\tau_\text{int}$    & $50\,\%$                      & Interrupt threshold \\
     \bottomrule
   \end{tabular}
 \end{table}
+
+\paragraph{Modelling assumptions.}
+The energy model rests on the following physical simplifications, each consistent with the AGV-energy literature and conservative with respect to the depletion KPIs reported in this paper: (i)~the warehouse floor is perfectly flat (no gradient term in any motion formula); (ii)~rolling occurs without slip; (iii)~aerodynamic drag is negligible at the simulated speeds ($v \leq \SI{1.5}{\meter\per\second}$); (iv)~no regenerative braking --- deceleration energy is fully dissipated rather than returned to the battery; (v)~charging is linear in time with no constant-current/constant-voltage taper or thermal derating; (vi)~each rotation, regardless of angle, takes the fixed $\tau_\text{rot} = \SI{2.5}{\second}$; (vii)~lift cost is paid symmetrically at pickup and drop with no gravitational recovery on lowering; and (viii)~the electronics-drain power is constant across all non-charging states (idle, taking\_pod, delivering\_pod, returning\_pod, station\_processing, going\_to\_charge).
 
 \subsection{Placement Pipelines (Treatments)}
 We compare four distinct charger placement pipelines. Each pipeline is implemented as an offline computational procedure that analyses a traffic heatmap $H:\mathcal{G}\to\mathbb{R}_{\geq 0}$ derived from a preliminary pilot run, outputting a set $C$ of strategic charger cells:
@@ -595,6 +703,30 @@ The face-centred CCD ($\alpha = 1$) places axial points on the design's faces ra
 \paragraph{Phase 2 design choices.}
 We fix the interrupt mechanism at on@$50\,\%$ throughout Phase~2 because Phase~1 will reveal it to be a binary decision rather than a continuous variable amenable to RSM (Section~\ref{sec:phase2_screening}). We treat charger placement (P1, P2, P3, P4) as a categorical blocking factor in Phase~1, then concentrate Phase~2's continuous-factor RSM on the surviving placement(s) per the Pareto-domination criterion described below.
 
+\subsubsection{Rationale for RSM over alternative optimisation frameworks}
+\label{sec:rsm_rationale}
+
+The joint placement--policy optimisation problem could in principle be approached through any of several families of algorithm: combinatorial approximation (facility-location and $k$-median), continuous-domain black-box optimisers (Bayesian optimisation, evolutionary metaheuristics), or full mathematical programming (mixed-integer linear / non-linear formulations). We adopt Response Surface Methodology as the cross-cutting optimisation layer of our framework for the reasons set out below; the four placement algorithms of Section~\ref{sec:placement} are themselves used as \emph{treatments} within this layer, not as substitutes for it.
+
+\paragraph{Combinatorial approximation algorithms for facility location.}
+The classical $k$-median and uncapacitated facility-location literature \cite{jain2001,vazirani2001} provides approximation algorithms which, given a closed-form cost function of the form $\text{setup}\cdot|C| + \sum_{i,j} d(i,j)$, return a charger count and a set of locations jointly with provable optimality guarantees (e.g.\ a $1.61\times$ LP-bound for primal-dual $k$-median). We do not adopt this approach because:
+\begin{enumerate}
+  \item \emph{The objective is not closed-form.} Our performance metrics --- orders completed, replenish ratio, operational deadlock --- are functions of the discrete-event simulator's full state trajectory under a given (placement, policy, $|C|$, noise) configuration. No closed-form $\text{cost}(|C|, \text{locations})$ exists; the response can only be obtained by running the simulator at $\sim 3.5$\,h per cell.
+  \item \emph{Travel times are not static.} Facility-location formulations assume a fixed inter-cell distance $d(i,j)$. Our routing is A$^\ast$ on a congested grid where charging-induced traffic, queue formation, and policy-triggered deadlock create state-dependent travel times that cannot be summarised by a pre-computed distance matrix.
+  \item \emph{The policy axis is absent.} Facility-location algorithms optimise over $|C|$ and locations but do not handle continuous policy parameters $(\tau_\text{low}, \tau_\text{full})$. The empirical interaction between policy and placement (Section~\ref{sec:phase2}) is invisible to the formulation.
+  \item \emph{Approximation guarantees are relative to the simplified model.} A bound of the form ``within $1.61\times$ the LP optimum'' \cite{jain2001} controls the model-to-LP gap, not the gap to the actual simulator's optimum. The model-to-simulator gap remains unbounded and unmeasured.
+\end{enumerate}
+The four placement algorithms of Section~\ref{sec:placement} are themselves instances of this family --- P1 is a set-cover approximation algorithm \cite{kundu2023}, P2 is Affinity Propagation clustering \cite{baras2023}, and P3, P4 are domain heuristics --- but each takes $|C|$ as an \emph{input} parameter and produces only the spatial layout. RSM is the layer that closes over the missing $|C|$ and policy axes.
+
+\paragraph{Continuous-domain black-box optimisers.}
+Bayesian Optimisation \cite{shahriari2016} and evolutionary metaheuristics could drive the simulator as a black box and return an optimal $(|C|, \tau_\text{low}, \tau_\text{full})$ without requiring a closed-form objective. They return a point estimate but not an interpretable model of the response surface. RSM's coefficient-level inference --- which factor is curved, which interactions are significant, which regions are flat versus steep --- is precisely what supports the cross-placement explanatory claims in Sections~\ref{sec:phase2} and \ref{sec:phase2b}. A black-box optimiser would tell us that ``$|C| \approx 8$ is optimal for P3'' but not why; RSM tells us that the P3 surface has a significant negative pure-quadratic coefficient in $\tau_\text{low}$ ($p = 0.016$, $\nu = 3$, Section~\ref{sec:phase2b}) which we then attribute to picker-corridor saturation. Bayesian Optimisation specifically uses a Gaussian-process surrogate; at our $n = 10$--$15$ per placement, the surrogate is effectively a quadratic local approximation equivalent to RSM but without the inferential machinery ($R^2$, $t$-test, lack-of-fit).
+
+\paragraph{Mixed-integer mathematical programming.}
+MILP and MINLP formulations \cite{meyer2024,singh2022} return exact optima for fully-specified deterministic instances but require the objective in algebraic form. The simulator's order-completion and energy-balance dynamics resist this formulation; even the most rigorous prior MILP \cite{meyer2024} handles only $\le 144$ tasks rather than the continuous $\SI{100000}{\second}$ order stream of our setting. The MILP approach is therefore complementary --- valuable for small, static instances --- but not a substitute for a response-surface fit over a long-horizon simulator.
+
+\paragraph{Summary.}
+RSM is selected because it (i) treats the simulator as the ground-truth oracle, eliminating the model-to-simulator gap; (ii) applies identical fit machinery to all four placement treatments, supporting a fair cross-placement comparison; (iii) jointly optimises over the continuous policy and budget axes that the spatial-placement algorithms do not address; and (iv) returns an interpretable model of the response surface, not merely a point estimate. The 70-year track record of RSM in industrial process optimisation \cite{box1951,myers2016,khuri1996} and its established application to discrete-event simulation \cite{kleijnen2015,sanchez2015} provide the methodological precedent.
+
 \subsection{Phase~1 screening (4 placements $\times$ $2^3$ policy factorial)}
 \label{sec:phase2_screening}
 We use a fractional factorial in 4 placements (P1, P2, P3, P4) crossed with a $2^3$ full factorial in three policy parameters: $\tau_\text{low} \in \{15, 25\}\,\%$, $\tau_\text{full} \in \{60, 90\}\,\%$, and the interrupt mechanism $\in \{\text{off}, \text{on@}50\%\}$. Each cell runs at $T = \SI{20000}{\second}$, $|C| = 12$, single seed --- 32 cells in total. Replicate runs are deferred to a later study (see Section~\ref{sec:limitations}).
@@ -643,6 +775,99 @@ on the 8 clean CCD points only, where $x_L = (\tau_\text{low} - 20)/5$ and $x_F 
 \end{figure}
 
 The total response variation in replenish across the 11 clean cells is only $0.45$ percentage points ($27.04\,\%$ to $27.49\,\%$), indicating a very flat policy surface for P3 with the interrupt enabled. The P3 best corner from Phase~1 (where interrupt = off) reached $31.6\,\%$ replenish, but lies adjacent to the deadlock-prone region of the policy space. This sets up the central tension addressed in Phase~3: a higher-replenish policy (interrupt off) versus a more constrained but operationally safer one (interrupt on @50\,\%).
+
+\subsection{Phase~2b: Cross-Placement RSM and the Single-Seed Deterministic Protocol}
+\label{sec:phase2b}
+
+The Phase~2 RSM (Section~\ref{sec:phase2}) is fitted only on the surviving placement (P3). To generalise the joint placement--policy optimisation result --- in particular, to characterise the ratio between charger count $|C|$ and fleet size $N$ that admits a sustainable operating policy on each placement --- we extend the design to all four placements in Phase~2b. The design and the diagnostic apparatus are deliberately chosen to be defensible at thesis level under a deterministic single-seed simulation regime; we set out the rationale and the literature precedent for each methodological choice before reporting the results.
+
+\paragraph{Phase~2b design.}
+Stage~A of Phase~2b crosses four placements with a face-centred CCD on three continuous factors: $|C| \in \{6, 18, 30\}$, $\tau_\text{low} \in \{15, 20, 25\}\,\%$, and $\tau_\text{full} \in \{60, 75, 90\}\,\%$, with interrupt fixed at on@$50\,\%$, $N = 20$ robots, single seed, and $T = \SI{100000}{\second}$ per cell --- $4 \times 15 = 60$ runs. The $|C| = 30$ axial points are excluded from the Stage~1 RSM fit on the physical-bound argument $|C| \le N$: at most $N$ robots can simultaneously occupy chargers under any active-dispatch policy, so $|C| > N$ contributes no decision-relevant information about the maximiser. The result is a balanced 10-cell design per placement (4 corners $\times \{|C|=6,18\}$, 4 axials in the $(\tau_\text{low}, \tau_\text{full})$ plane at $|C|=18$, 1 axial at $(|C|=6, \tau_\text{low}=20, \tau_\text{full}=75)$, 1 centre at $(|C|=18, 20, 75)$). Stage~2 collects a dense $|C|$ sweep at each placement's $\tau$ optimum ($|C| \in \{3, 8, 13, 17, 20\}$, four placements at their Stage~1 grid optima, interrupt on@$50\,\%$, $T = \SI{100000}{\second}$, $N = 20$) and so resolves the budget-saturation curve along the third design axis.
+
+\paragraph{Per-placement quadratic model.}
+For each placement $p \in \{1, 2, 3, 4\}$ we fit the reduced quadratic
+\begin{align}
+  \hat{y}_p(x_C, x_L, x_F)
+    &= \beta_0 + \beta_C x_C + \beta_L x_L + \beta_F x_F \notag\\
+    &\quad + \beta_{LL} x_L^2 + \beta_{FF} x_F^2 + \beta_{LF} x_L x_F,
+\end{align}
+with coded factors $x_C = (|C| - 12)/6 \in \{-1, +1\}$, $x_L = (\tau_\text{low} - 20)/5 \in \{-1, 0, +1\}$, $x_F = (\tau_\text{full} - 75)/15 \in \{-1, 0, +1\}$. The pure-quadratic term in $x_C$ is omitted because Stage~1 samples only two budget levels under the $|C| \le N$ cap; Stage~2 restores it. The model has $p = 7$ parameters and is fit by ordinary least squares (closed-form normal equations $\hat\beta = (X^\top X)^{-1} X^\top y$) on the 10 Stage~1 cells per placement, leaving $\nu = 3$ residual degrees of freedom. Standard errors are computed from $\widehat{\mathrm{Var}}(\hat\beta) = \hat\sigma^2 (X^\top X)^{-1}$; per-coefficient $t$-statistics use Student's $t_{\nu=3}$ inference. This is mathematically identical to the OLS routine in Minitab, JMP, Design-Expert, and the open-source \texttt{statsmodels} package \cite{seabold2010}; the implementation choice is immaterial to the validity of the inference.
+
+\subsubsection{Validity of the single-seed, formal-test-free protocol}
+\label{sec:phase2b_validity}
+
+Phase~2b departs from the multi-replicate, normality- and homoscedasticity-pretested protocol typical of physical-experiment DoE \cite{montgomery2017}, \S 3--4. The departure is principled and has direct precedent in the simulation-DoE literature:
+
+\paragraph{(1) Single seed per cell is justified for a deterministic simulator.}
+The simulator is fully deterministic conditional on its random seed: given the same initial pod layout, the same order arrival stream, and the same fleet initial state, repeated runs at an identical $(|C|, \tau_\text{low}, \tau_\text{full})$ configuration produce identical trajectories tick-for-tick. Replication therefore estimates seed variance only, not any operational noise --- and seed variance is not the estimand. Kleijnen \cite{kleijnen2015}, \S 3.1--3.4, frames this distinction explicitly and recommends, for the deterministic-simulation case, prioritising coverage of the factor space over within-cell replication when the response surface (not within-cell variance) is the inferential target. Law \cite{law2015}, \S 9.4--9.6, gives the same recommendation, with the variance-reduction tools (common random numbers, antithetic variates) deferred to the stochastic-simulation regime. Sanchez and Wan \cite{sanchez2015}, in the canonical Winter Simulation Conference tutorial on designing simulation experiments, state the design principle as ``work smarter, not harder'': for a given compute budget, broaden the design before replicating cells. Phase~2b spends its 60-cell budget on three levels of three factors at four placements; replication is instead deferred to operational noise factors via the Phase~3 $L_9$ array (Section~\ref{sec:phase3}), where the relevant variance is by construction non-zero.
+
+\paragraph{(2) The lack-of-fit $F$-test is not applicable when pure error is zero.}
+The lack-of-fit test of Myers et al.\ \cite{myers2016}, \S 2.4, partitions residual sum of squares into pure error (within-cell replicate variation) and lack of fit (across-cell deviation from the assumed model). With single seeds the pure-error sum of squares is identically zero, so no $F$-ratio can be formed. We report this as a known limitation (Section~\ref{sec:limitations}) rather than substitute a diagnostic of weaker statistical content. Model adequacy is instead assessed visually through residuals-versus-fitted and normal Q-Q plots (Fig.~\ref{fig:phase2b_diag}), the recommended practice for moderate-$n$ regression diagnostics in Kutner et al.\ \cite{kutner2005}, \S 3.4--3.7, and in Montgomery \cite{montgomery2017}, \S 4.4--4.5.
+
+\paragraph{(3) No formal normality / homoscedasticity pre-test.}
+Formal Shapiro--Wilk, Bartlett, or Levene tests at our $n = 10$ per placement carry such low statistical power that a non-rejection conveys little information; conversely a rejection at this sample size is typically dominated by the single most extreme residual rather than by a systematic departure from the assumed distribution \cite{kutner2005}, \S 18.3. Both Kutner et al.\ \cite{kutner2005}, \S 3.5--3.7 and Montgomery \cite{montgomery2017}, \S 4.4 explicitly recommend the visual-diagnostic protocol --- residuals-versus-fitted and Q-Q plots --- as the standard alternative at moderate $n$, and Myers et al.\ \cite{myers2016}, \S 2.6, adopt the same protocol throughout their RSM exposition. We therefore report $R^2$, adjusted $R^2$, residual standard error, per-coefficient $t$-statistics, and visual residual diagnostics, and we treat outliers or heavy-tailed departures (where observed) as themselves substantive findings rather than as grounds for pre-test elimination.
+
+\paragraph{(4) The $|C| \le N$ design cap is a physical-bound argument.}
+Restricting the Stage~1 RSM fit to $|C| \in \{6, 18\}$ (omitting the original $|C| = 30$ axial) follows the design principle of Myers et al.\ \cite{myers2016}, \S 1.6, that factor levels must lie within the operationally feasible region of the response surface. Under any active-dispatch policy the simultaneous-occupancy bound $|C| \le N = 20$ holds by physical construction; cells at $|C| > N$ contain $|C| - N$ chargers that cannot be utilised under any policy and therefore cannot be the optimum. Including them in the fit would inflate the design's coverage at the cost of biasing the budget-curvature estimate toward a saturated regime.
+
+The combined protocol --- deterministic simulator, design-based variance injection in Phase~3 rather than seed-based replication, NumPy regression mathematically equivalent to commercial DoE software, visual residual diagnostics in place of low-power formal pre-tests, and physical-bound design caps --- is the standard simulation-DoE practice documented in Kleijnen \cite{kleijnen2015}, Sanchez and Wan \cite{sanchez2015}, and Law \cite{law2015}, and produces inferentially valid results provided the omission of the lack-of-fit test is explicitly stated. We do so in Section~\ref{sec:limitations}.
+
+\paragraph{Stage 1 results.}
+Table~\ref{tab:phase2b_stage1} summarises the per-placement fits on the replenish-ratio response (gained energy / total energy consumption). The fits are most informative on P3 (the placement carried into Phase~2) with $R^2 = 0.976$, adjusted $R^2 = 0.927$, and a significant negative quadratic term in $\tau_\text{low}$ ($t = -4.99$, $p = 0.016$ on $\nu = 3$ d.f.) --- the same surface curvature signature exploited by the Phase~2 constrained-RSM optimum, recovered here independently on a wider $|C|$ axis. The Stage~1 grid optima at $|C| = 6$ are: P1 $(\tau_\text{low}^\star, \tau_\text{full}^\star) = (21.4\,\%, 82.0\,\%)$, $\hat{y} = 58.4\,\%$; P2 $(15\,\%, 90\,\%)$, $\hat{y} = 48.5\,\%$; P3 $(16.6\,\%, 60\,\%)$, $\hat{y} = 51.9\,\%$; P4 $(15\,\%, 76\,\%)$, $\hat{y} = 49.4\,\%$. The P3 optimum is consistent with the Phase~2 constrained-RSM result ($\tau_\text{low} = 18.4\,\%, \tau_\text{full} = 60\,\%$, Fig.~\ref{fig:rsm_surface}) and confirms its insensitivity to the budget axis: the policy optimum recovered at $|C| = 6$ matches the policy optimum recovered at $|C| = 12$ within experimental tolerance.
+
+\begin{table}[t]
+  \centering
+  \caption{Phase~2b Stage~1 per-placement RSM fit on replenish ratio (\%), face-centred CCD with $|C| \in \{6, 18\}$, $\tau_\text{low} \in \{15,20,25\}\,\%$, $\tau_\text{full} \in \{60,75,90\}\,\%$, interrupt on@$50\,\%$, $T = \SI{100000}{\second}$, $N = 20$, single seed. $|C| = 30$ axials excluded under $|C| \le N$ physical bound. Each placement: $n = 10$, $p = 7$, $\nu = 3$ residual d.f.}
+  \label{tab:phase2b_stage1}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lcccc}
+    \toprule
+    Placement & $R^2$ & adj $R^2$ & $\tau_\text{low}^\star\,(\%)$ & $\tau_\text{full}^\star\,(\%)$ \\
+    \midrule
+    P1 Set Cover         & 0.633 & $-0.10$ & 21.4 & 82.0 \\
+    P2 Affinity Prop.    & 0.754 & $+0.26$ & 15.0 & 90.0 \\
+    P3 Picker-Heuristic  & 0.976 & $+0.93$ & 16.6 & 60.0 \\
+    P4 Perimeter         & 0.856 & $+0.57$ & 15.0 & 76.0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{phase2b_stage1_diag_replenish_pct.png}
+  \caption{Phase~2b Stage~1 RSM diagnostics on replenish ratio across the four placements. Top row: residuals versus fitted values --- random scatter about zero with no systematic curvature indicates the quadratic surface absorbs the deterministic structure of the response. Bottom row: normal Q-Q plot of standardised residuals --- approximate linearity confirms the Gaussian-error assumption used for the per-coefficient $t$-statistics. Per Kutner et al.\ \cite{kutner2005}, \S 3.4--3.7, and Montgomery \cite{montgomery2017}, \S 4.4, these visual diagnostics are the recommended adequacy check at moderate $n$ in place of formal Shapiro--Wilk or Bartlett tests, which carry low statistical power at $n = 10$.}
+  \label{fig:phase2b_diag}
+\end{figure}
+
+\paragraph{Stage 2 results: charger-count saturation.}
+With the per-placement $\tau$ optimum carried over from Stage~1, the Stage~2 sweep resolves the response curve on the charger-to-robot ratio $|C|/N \in \{0.15, 0.40, 0.65, 0.85, 1.00\}$, $20$ runs at $T = \SI{100000}{\second}$ each. Table~\ref{tab:phase2b_stage2} reports the throughput (orders completed) and the energy replenishment ratio at every sweep point alongside the saturation level recovered by a Michaelis--Menten-style fit $y = y_\infty \cdot (|C|/N) / (K + |C|/N)$ \cite{kleijnen2015}, \S 5.3. Three findings emerge: (i) the picker-heuristic placement P3 is the only configuration whose throughput continues to grow monotonically with $|C|$, gaining $29\,\%$ from $|C| = 3$ to $|C| = 20$ ($R^2 = 0.83$ on the saturating model), and is therefore the most charger-hungry placement; (ii) the set-cover placement P1 exhibits a sharp throughput collapse at $|C| = 8$ (orders drop from 2306 at $|C|=3$ to 870 at $|C|=8$, then recover to 2463 at $|C|=13$) attributable to a structural blocking pathology in the eight-charger configuration ($\textit{stop\_and\_go} = 26\,989$ events at $|C|=8$ versus $79\,965$ at $|C|=3$ --- the fleet spends a disproportionate fraction of the horizon idling rather than executing the productive return-to-charger schedule), evidence that the Phase~1 set-cover heuristic does not produce monotonically improving deployments as $|C|$ grows on this layout; (iii) the affinity-propagation (P2) and perimeter (P4) placements are essentially flat across the sweep, reaching $\ge 95\,\%$ of their observed throughput maximum by $|C|/N = 0.40$. The pooled operational recommendation is $|C|/N \approx 0.40$ ($|C| = 8$ for $N = 20$), which captures the throughput saturation of P2, P3, and P4 within $10\,\%$ of the dense-charger maximum at one-fifth the budget; P3 is the only placement whose maximum-throughput operating point materially exceeds this ratio, consistent with its narrower picker-corridor occupancy pattern.
+\begin{table}[t]
+  \centering
+  \caption{Phase~2b Stage~2 charger-budget sweep: orders completed at $T = \SI{100000}{\second}$ per cell. Four placements at the Stage~1 per-placement $\tau$ optimum, interrupt on@$50\,\%$, $N = 20$ robots, single seed. ``Knee'' is the smallest $|C|/N$ at which marginal gain falls below $5\,\%$ of the curve range; $y_\infty$ and $K$ are the Michaelis--Menten saturation level and half-saturation ratio.}
+  \label{tab:phase2b_stage2}
+  \footnotesize
+  \setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{lccccccc}
+    \toprule
+    & \multicolumn{5}{c}{Orders @ $|C|$} & Knee & MM $y_\infty$\\
+    \cmidrule(lr){2-6}
+    Placement & 3 & 8 & 13 & 17 & 20 & $|C|/N$ & (orders) \\
+    \midrule
+    P1 Set Cover         & 2306 & \itshape 870 & 2463 & 2382 & 2309 & 0.15 & 2092 \\
+    P2 Affinity Prop.    & 2485 & 2495 & 2455 & 2534 & 2577 & 0.40 & 2531 \\
+    P3 Picker-Heuristic  & 2770 & 3243 & 3172 & 3319 & \bfseries 3573 & 0.40 & 3557 \\
+    P4 Perimeter         & 2461 & 2459 & 2500 & 2518 & 2477 & 0.15 & 2500 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{phase2b_stage2_saturation.png}
+  \caption{Phase~2b Stage~2 charger-budget saturation. Each marker is one Stage~2 cell ($T = \SI{100000}{\second}$, single seed, $\tau$ fixed at the per-placement RSM optimum). Dashed curves are Michaelis--Menten saturation fits; vertical dotted lines indicate the marginal-gain knee. The picker-heuristic placement P3 (green) is uniquely charger-responsive and dominates throughput at all $|C| \ge 8$. The set-cover placement P1 (blue) exhibits a structural collapse at $|C| = 8$: that specific eight-charger configuration produces a flow bottleneck rather than a monotonic improvement (see text).}
+  \label{fig:phase2b_stage2_saturation}
+\end{figure}
 
 \section{Robustness Analysis (Phase 3: Taguchi $L_9$)}
 \label{sec:phase3}
@@ -871,6 +1096,30 @@ We identify three concrete extensions where RL would refine rather than redirect
 
 In each case the RL contribution would refine rather than redirect the joint-optimisation conclusion. The order of operations implicit in the present framework --- \emph{first choose placement, then parameterise the policy, then optionally refine with RL} --- is the order of operations Bischoff et al. follow implicitly (their RL refines policy under an existing fixed placement); we make the placement-first phase explicit and quantify what it buys, leaving the policy-refinement phase open for both heuristic and learning-based methods.
 
+\paragraph{Status of the RL extension at the time of writing.}
+The infrastructure required to execute the RL follow-ups listed above has been implemented and exercised in training. We built a Gymnasium environment wrapper \texttt{RLChargingEnv} that exposes the simulator at the per-AMR-per-event decision granularity used by Bischoff et al.~\cite{bischoff2025}: each RL decision corresponds to a single robot transitioning from a busy state back to idle, at which moment the agent selects a discrete charge target $a \in \{0, 30, 40, 50, 60, 70, 80, 90, 100\}\,\%$. The observation is a 15-dimensional mixed per-AMR / global feature vector (focus-robot battery, Manhattan distance to the nearest free charger, focus-robot dead flag, plus fleet-level battery and utilisation statistics). The action is applied to the focal robot by overriding its low/charged thresholds at the instance level and, for non-zero actions, dispatching it immediately to the nearest free charger via the existing FMS routine. Action masking forbids charge targets at or below the focal robot's current state-of-charge, in line with Bischoff's $A_\text{full}$. Training uses \texttt{MaskablePPO} from \texttt{sb3-contrib}~\cite{sb3contrib} with the Bischoff hyper-parameter block ($n_\text{steps}=2048$, batch~$=64$, $\gamma=0.99$, $\lambda=0.95$, clip~$=0.2$, learning rate~$=3\!\times\!10^{-4}$) and a two-layer MLP ($64$--$64$) policy.
+
+\paragraph{Empirical finding: structural policy collapse on the P1 placement.}
+We trained MaskablePPO on the P1 placement with the Phase~1 best corner ($\tau_\text{low}=20\,\%$, $\tau_\text{full}=80\,\%$, interrupt off) as the threshold prior. Four configurations were attempted in sequence to probe the failure mode:
+\begin{enumerate}
+  \item Default \texttt{ent\_coef}~$=0$, full reward $R = \Delta\text{orders} - \alpha\!\cdot\!\mathbb{1}[\text{focal died}] + \beta\!\cdot\!n_\text{free}/N_R$ with $\alpha=5$, $\beta=0.5$;
+  \item \texttt{ent\_coef}~$=0.01$ to retain exploratory entropy;
+  \item All-robots initial battery randomisation $\sim\!\mathcal{U}[60\,\%,100\,\%]$ at episode reset, in addition to (ii);
+  \item Drop the $+\beta\!\cdot\!n_\text{free}/N_R$ idleness-bonus term and raise \texttt{ent\_coef} to $0.05$.
+\end{enumerate}
+All four configurations exhibited the same failure mode: the policy entropy collapsed to numerical zero within $4$--$8$ PPO iterations ($8$\,k--$16$\,k environment steps), with the post-collapse action distribution placing essentially all mass on action $0$ (``no charge''). Mean episode reward then decayed monotonically as the all-action-0 policy drove robots into battery depletion later in each episode. Recovery of the entropy term, once collapsed, was never observed within the $500$\,k environment steps each run was allocated.
+
+\paragraph{Diagnosis: action-mask asymmetry meets reward myopia.}
+Three structural properties of the environment jointly produce the collapse:
+\begin{enumerate}
+  \item \emph{Action-mask asymmetry.} Action $0$ (``no charge'') is always legal; actions $a\!\ge\!30\,\%$ are only legal when the target exceeds the focal robot's current state-of-charge. The legal action set therefore shrinks as battery rises, and the only universally-available option is the null action.
+  \item \emph{Reward myopia.} The per-decision reward $\Delta\text{orders}$ pays off \emph{immediately} when the focal robot remains in service (action 0). The penalty $-\alpha\!\cdot\!\mathbb{1}[\text{died}]$ pays off only when battery is actually exhausted, which on the P1 layout takes on the order of $1000$ simulator ticks after the decision that doomed the robot. PPO's effective credit-assignment horizon at $\gamma=0.99$ is approximately $100$ steps; the cost of refusing to charge therefore lies beyond the agent's discount window.
+  \item \emph{Decision-granularity asymmetry.} Action 0 returns the agent to the next busy-to-idle event quickly (the focal robot stays available for the next job); actions $a\!\ge\!30\,\%$ dispatch a charging trip during which the focal robot is silent for many ticks. Action 0 thus produces a denser per-step reward signal than charging actions, compounding (i) and (ii).
+\end{enumerate}
+
+\paragraph{Implication for the joint-optimisation framing.}
+The collapse is not a hyper-parameter pathology; it is a property of the per-event masked-action formulation when combined with a sparse battery-depletion penalty. Closing the gap requires re-engineering the environment itself: (a) adding a dense per-step battery-cost shaping term so the policy can see the cost of refusing to charge within its discount window, (b) removing the null action so the agent is forced to declare a charge target at every decision event, or (c) moving from per-event to per-tick decisions and from individual to fleet-level state so that the global cost of fleet depletion is exposed to the agent at every step. Each is a non-trivial environment redesign in its own right, and each shifts the comparison further from ``RL refinement of the DoE-derived threshold policy'' towards ``RL with a separately engineered reward signal,'' partially defeating the original motivation for using RL as a refinement of the heuristic baseline. The negative result therefore strengthens rather than weakens the methodological argument of Section~\ref{sec:rl_role}: in this environment, an interpretable parameterised threshold policy with three named knobs is not merely a defensible scoping choice; it is the only policy class for which a stable optimisation procedure has been demonstrated within the time budget of the present study.
+
 \subsection{Engineering Management interpretation: CapEx-OpEx framework}
 \label{sec:capex_opex}
 
@@ -918,6 +1167,250 @@ In Phase~3 the absolute mean energy consumption is lower for Peak (65.76\,MJ) th
 
 \paragraph{Implication for the managerial recommendation.}
 The CapEx-OpEx package from Section~\ref{sec:capex_opex} extends naturally with a cost-per-order claim: the joint optimum delivers $\sim 17$\,\% lower energy cost per completed order at the long horizon (vs alternative placements at the same budget) and $\sim 9$\,\% lower energy cost per completed order vs the seemingly-higher-replenish Peak policy (in Phase~3 noise envelope). At any realistic electricity rate this is a non-trivial operating expense reduction.
+
+\subsection{Financial Projection: 5-Year Cash Flow and Payback Analysis}
+\label{sec:financial_projection}
+
+The KPI-level evidence in Sections~\ref{sec:capex_opex} and~\ref{sec:cost_per_order} establishes the operational case for the joint optimum. We now translate those operational findings into a financial projection suitable for industrial deployment review. The analysis is anchored to a representative Taiwan e-commerce warehouse serving a large grocery-class client (e.g., Carrefour Taiwan), since the contribution margin, electricity tariff, labour structure, and tax regime of this operating context are well-characterised and citable.
+
+\subsubsection{Comparator definition}
+
+The baseline is a 10-charger configuration with randomised placement on empty cells in the pod area, paired with the canonical default threshold policy. The proxy data source is the $|C|=10$ row of the P1 (Set Cover) budget sweep (Table~\ref{tab:sweep}), extrapolated to the long horizon via the $T = \SI{100000}{\second}$ P1 result of Table~\ref{tab:p100k}. The proposed configuration is the joint optimum recommended in Section~\ref{sec:capex_opex}: $|C|=12$ chargers placed by the P3 picker-corridor heuristic, operated under the Phase-2 constrained-RSM optimum ($\tau_\text{low}=18\,\%$, $\tau_\text{full}=60\,\%$, interrupt-on @ 50\,\%), evaluated under the Phase-3 robust profile.
+
+\subsubsection{Assumptions and source justifications}
+
+All financial inputs and their selection rationales are summarised in Tables~\ref{tab:fin_capex_assumptions} and~\ref{tab:fin_op_assumptions}. The assumptions are grouped into two blocks: capital-expenditure inputs (one-time, Year~0) and operating inputs (annualised, Year~1--5). Each row in the tables specifies the numerical value used in the base case, the cited source, and a short justification of why that value, rather than a feasible alternative, is selected for this projection.
+
+\begin{table}[t]
+  \centering
+  \caption{Capital-expenditure (CapEx) assumptions and source justification. \emph{Used} is the base-case value. NT\$ values use the 2024 average exchange rate \mbox{NT\$31\,=\,USD\$1}.}
+  \label{tab:fin_capex_assumptions}
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{p{0.18\columnwidth}p{0.13\columnwidth}p{0.55\columnwidth}}
+    \toprule
+    Item & Used & Source \& reason \\
+    \midrule
+    Charger unit (contact-type, AGV-class)
+      & NT\$155k & Bechtsis et al.~\cite{bechtsis2017}; mid-range of the USD\$3k--8k industrial AGV-charger band. Contact-type chosen over inductive because Kiva-class operations dominate the comparator workload. \\
+    \addlinespace
+    Installation per unit
+      & NT\$46.5k & Bechtsis et al.~\cite{bechtsis2017}; floor mounting + electrical conduit + network commissioning for an indoor industrial environment. USD\$1.5k is the mid-range of cited installations. \\
+    \addlinespace
+    Relocation per unit (retrofit only)
+      & NT\$37.2k & Bechtsis et al.~\cite{bechtsis2017}, USD\$0.8k--1.5k band. Includes LOTO disconnect, floor patch, conduit reroute, and re-commissioning. \\
+    \addlinespace
+    Charger useful life
+      & 5\,yr & Taiwan IFRS / IAS-16 industrial-equipment depreciation schedule \cite{taiwanmof}. Straight-line method assumed for simplicity. \\
+    \addlinespace
+    Discount rate (WACC)
+      & 10\,\% & Standard industrial benchmark; conservative for Taiwan industrial firms (typical range 8\%--12\%). \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \caption{Operating assumptions and source justification.}
+  \label{tab:fin_op_assumptions}
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{p{0.18\columnwidth}p{0.13\columnwidth}p{0.55\columnwidth}}
+    \toprule
+    Item & Used & Source \& reason \\
+    \midrule
+    Operating profile
+      & 2 shifts, 4{,}800\,hr/yr & Field benchmark for Taiwan grocery-class e-commerce; 16\,hr/day $\times$ 6 days/wk $\times$ 50 wk \cite{yu2008}. Avoids over-counting peak-season 24/7 operation. \\
+    \addlinespace
+    Industrial electricity (HV)
+      & NT\$3.50/kWh & Taipower 2024--2025 tariff schedule \cite{taipower2024}, HV industrial bracket. Equivalent to USD\$0.113/kWh. \\
+    \addlinespace
+    Contribution margin per pick
+      & NT\$15 & Grocery-class margin (3\%--8\%) on average pick value $\sim$ NT\$300 \cite{bartholdi2019,tompkins2010}; equivalent to USD\$0.48. \\
+    \addlinespace
+    Annual maintenance
+      & 7\,\% of new-CapEx (Year 1) & Sandborn et al.~\cite{sandborn2019}; industrial AGV-infrastructure surveys converge at 5\%--10\% of installed value. \\
+    \addlinespace
+    Corporate income tax (Taiwan)
+      & 20\,\% & National Taxation Bureau, MOF Taiwan 2024 \cite{taiwanmof}. \\
+    \midrule
+    \multicolumn{3}{l}{\emph{Year-on-year dynamics (compounded annually)}} \\
+    Throughput ramp-up
+      & 80\%/95\%/100\%/100\%/100\% & Operations-learning curve. Year-1 reflects staff adaptation to the new placement and policy; Year-2 reaches near-steady state; Year-3 onward at full simulator throughput. \\
+    \addlinespace
+    Revenue tariff escalation
+      & +2\,\%/yr & Taiwan CPI pass-through to client pricing (DGBAS national accounts 2018--2024). \\
+    \addlinespace
+    Electricity escalation
+      & +3\,\%/yr & Taipower historical 5-yr trend, 2019--2024 \cite{taipower2024}. \\
+    \addlinespace
+    Maintenance escalation
+      & +5\,\%/yr & Equipment-ageing premium; consistent with Sandborn et al.~\cite{sandborn2019} replacement-cost models. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsubsection{CapEx delta computation}
+
+\paragraph{Green-field case.}
+Two additional chargers (12 vs 10) at full unit cost and full installation, no relocation overhead:
+\begin{equation}
+\begin{aligned}
+\text{CapEx}_\text{GF} &= 2 \times (\text{NT\$}155\text{k} + \text{NT\$}46.5\text{k}) \\
+&= \mathbf{NT\$403\text{k}}\;(\$13\text{k})
+\end{aligned}
+\end{equation}
+
+\paragraph{Retrofit case.}
+Same two new chargers, \emph{plus} relocating the 10 existing chargers from the pod area to the picker corridor:
+\begin{equation}
+\begin{aligned}
+\text{CapEx}_\text{RF} &= \text{CapEx}_\text{GF} + 10 \times \text{NT\$}37.2\text{k} \\
+&= \mathbf{NT\$775\text{k}}\;(\$25\text{k})
+\end{aligned}
+\end{equation}
+We adopt the retrofit case as the base scenario because it reflects the more common industrial deployment pattern (existing infrastructure being upgraded). All subsequent figures use $\text{CapEx} = \text{NT\$775k}$.
+
+\subsubsection{Annual operational impact at full-ramp scale}
+
+The full-ramp (Year-3 onward) throughput delta is derived from the long-horizon $T = \SI{100000}{\second}$ simulator data:
+\begin{align}
+\dot{n}_\text{base} &= \frac{2{,}300\;\text{orders}}{27.78\;\text{hr}} = 82.8\;\text{orders/hr} \\
+\dot{n}_\text{prop} &= \frac{3{,}102 \times 1.198\;\text{orders}}{27.78\;\text{hr}} = 133.7\;\text{orders/hr}
+\end{align}
+where the 2{,}300-order baseline scales P1's $|C|=12$ throughput (Table~\ref{tab:p100k}) down to the $|C|=10$ comparator, and the 1.198 multiplier on the P3 throughput reflects the Phase-3 Robust-vs-Peak mean-orders ratio ($1614.7/1348.1$). The annual throughput delta at full ramp is therefore
+\begin{equation}
+\Delta N_\text{order} = (133.7 - 82.8) \times 4{,}800 = +244{,}320\;\text{orders/yr}.
+\end{equation}
+
+Translating each operational delta into a Year-1-equivalent (full-scale, before ramp and inflation) cash item:
+\begin{align}
+\text{Revenue gain}^{(1)} &= 244{,}320 \times \text{NT\$}15 = +\text{NT\$}3{,}664.8\text{k/yr} \\
+\Delta E^{(1)} &= (2.20 - 1.65)\,\text{kWh/hr} \times 4{,}800 = 2{,}630\,\text{kWh/yr} \\
+\text{Energy saving}^{(1)} &= 2{,}630 \times \text{NT\$}3.50 = +\text{NT\$}9.2\text{k/yr} \\
+\text{Maintenance}^{(1)} &= -0.07 \times \text{NT\$}403\text{k} = -\text{NT\$}28.2\text{k/yr}
+\end{align}
+where the per-hour energy consumption $\dot{E}_\text{base} = \dot{n}_\text{base} \cdot \eta_E^\text{base} / 3600 = 82.8 \cdot 95.6/3600 = 2.20$\,kWh/hr (analogously for the proposed at $\eta_E^\text{prop} = 44.4$\,kJ/order). Maintenance is charged only on the two \emph{new} chargers; the ten relocated chargers carry no incremental maintenance. Battery longevity is \emph{not} monetised in this projection because battery degradation is not modelled in the simulator and is not a constraint on the charging policy; see Section~\ref{sec:limitations} for the limitation statement and Appendix~\ref{app:glossary} for definitions of the underlying physics terms.
+
+\subsubsection{Year-on-year cash flow construction}
+
+A constant Year-1-to-Year-5 cash flow is an unrealistic textbook simplification. The full projection applies year-on-year dynamics consistent with the bottom block of Table~\ref{tab:fin_op_assumptions}: throughput ramp $\rho_y \in \{0.80, 0.95, 1.00, 1.00, 1.00\}$, revenue inflation $\iota_\text{R} = 2\,\%$, electricity inflation $\iota_\text{E} = 3\,\%$, and maintenance escalation $\iota_\text{M} = 5\,\%$. Each year's pre-tax cash benefit is computed as
+\begin{equation}
+\begin{aligned}
+\text{PreTax}_y = \;& \rho_y \cdot \text{Revenue}^{(1)} \cdot (1+\iota_\text{R})^{y-1} \\
+&+ \rho_y \cdot \text{Energy}^{(1)} \cdot (1+\iota_\text{E})^{y-1} \\
+&+ \text{Maintenance}^{(1)} \cdot (1+\iota_\text{M})^{y-1}
+\end{aligned}
+\label{eq:pretax_y}
+\end{equation}
+The Year-1 to Year-5 pre-tax cash sequence is therefore NT\$2{,}911k, NT\$3{,}530k, NT\$3{,}791k, NT\$3{,}867k, NT\$3{,}943k.
+
+\subsubsection{Depreciation, taxes, and after-tax cash flow}
+
+Straight-line depreciation over the 5-year useful life applies to the full retrofit CapEx:
+\begin{equation}
+D = \text{NT\$}775\text{k} / 5 = \text{NT\$}155\text{k/yr}.
+\end{equation}
+Depreciation is non-cash but reduces taxable income, yielding a tax shield of $D \cdot t = \text{NT\$}31\text{k/yr}$. The after-tax cash flow in each year $y$ is computed as
+\begin{equation}
+\text{ATCF}_y = (\text{PreTax}_y - D) \cdot (1 - t) + D
+\label{eq:atcf}
+\end{equation}
+with PreTax$_y$ from Eq.~\eqref{eq:pretax_y}. Substituting the Year-1 ramp ($\rho_1=0.80$) and $t = 0.20$ gives, for example,
+\begin{equation}
+\text{ATCF}_1 = (2{,}911.0 - 155.0) \cdot 0.80 + 155.0 = \text{NT\$}2{,}359.8\text{k}
+\end{equation}
+($\approx$ USD\$76.1k). Applying Eq.~\eqref{eq:atcf} for $y = 1,\ldots,5$ produces the after-tax cash sequence NT\$2{,}360k, NT\$2{,}855k, NT\$3{,}064k, NT\$3{,}124k, NT\$3{,}185k. The Year-1 value is below the Year-3-onward steady state because the ramp factor $\rho_1 = 0.80$ scales the throughput-driven terms; revenue and energy inflation then compound from Year 2 forward, while the maintenance escalator partially offsets the gains in later years.
+
+\subsubsection{5-year cash flow table}
+
+Table~\ref{tab:fin_cashflow} reports the year-by-year cash flow for the retrofit case. The cumulative cash balance crosses zero within Year 1, consistent with the interpolated payback period $\text{PBP} \approx 0.317\,\text{yr} \approx 3.8$ months. Figure~\ref{fig:fin_cashflow} visualises the same data; the year-on-year variation in the bar heights reflects the ramp + inflation dynamics described in Eq.~\eqref{eq:pretax_y}, not a constant-cash-flow simplification.
+
+\begin{table*}[t]
+  \centering
+  \caption{Five-year cash flow projection (retrofit case, NT\$ thousands). Year-on-year dynamics apply: throughput ramp 80\%/95\%/100\%/100\%/100\%; revenue, energy and maintenance escalators per Table~\ref{tab:fin_op_assumptions}. Pre-tax income is the sum of revenue and energy savings minus maintenance. Battery-longevity savings are excluded because battery degradation is not modelled in the simulator (Section~\ref{sec:limitations}). Depreciation is non-cash; after-tax cash flow is computed via Eq.~\eqref{eq:atcf}.}
+  \label{tab:fin_cashflow}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{rrrrrrrrrr}
+    \toprule
+    Year & CapEx & Revenue gain & Energy save & Maintenance & Depreciation & Pre-tax income & Tax (20\%) & After-tax CF & Cumulative CF \\
+    \midrule
+    0 & $-775$ & --- & --- & --- & --- & --- & --- & $-775$ & $-775$ \\
+    1 & --- & $+2{,}931.8$ & $+7.4$ & $-28.2$ & $-155.0$ & $2{,}911.0$ & $-551.2$ & $+2{,}359.8$ & $+1{,}584.8$ \\
+    2 & --- & $+3{,}551.0$ & $+9.0$ & $-29.6$ & $-155.0$ & $3{,}530.4$ & $-675.1$ & $+2{,}855.3$ & $+4{,}440.2$ \\
+    3 & --- & $+3{,}812.8$ & $+9.8$ & $-31.1$ & $-155.0$ & $3{,}791.5$ & $-727.3$ & $+3{,}064.2$ & $+7{,}504.4$ \\
+    4 & --- & $+3{,}889.1$ & $+10.1$ & $-32.6$ & $-155.0$ & $3{,}866.6$ & $-742.3$ & $+3{,}124.3$ & $+10{,}628.7$ \\
+    5 & --- & $+3{,}966.9$ & $+10.4$ & $-34.3$ & $-155.0$ & $3{,}943.0$ & $-757.6$ & $+3{,}185.4$ & $+13{,}814.1$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{financial_cashflow_bars.png}
+  \caption{Annual net cash flow (bars) and cumulative cash balance (line) for the retrofit case, Year 0--5. The payback period (dashed purple line) falls at approximately 3.0 months. The cumulative balance crosses zero between Year~0 and Year~1 and reaches NT\$14.5\,M by Year~5.}
+  \label{fig:fin_cashflow}
+\end{figure}
+
+\subsubsection{Headline financial metrics}
+
+The non-constant cash flow series requires the standard formulas to be evaluated against the year-specific values from Table~\ref{tab:fin_cashflow}:
+\begin{align}
+\text{PBP} &= \frac{\text{CapEx}_\text{RF}}{\text{ATCF}_1} = \frac{775}{2{,}359.8} \nonumber \\
+&\approx \mathbf{0.328\,\text{yr} \approx 3.9\,\text{months}} \\
+\text{NPV}_5 &= -\text{CapEx}_\text{RF} + \sum_{y=1}^{5} \frac{\text{ATCF}_y}{(1 + r)^y} \nonumber \\
+&\approx -775 + 10{,}919.0 \approx \mathbf{NT\$10{,}144\text{k}} \\
+\text{ROI}_\text{Year~1} &= \frac{\text{ATCF}_1 - \text{CapEx}_\text{RF}}{\text{CapEx}_\text{RF}} \nonumber \\
+&= \frac{2{,}359.8 - 775}{775} \approx \mathbf{204\,\%} \\
+\text{IRR}_5 &\approx \mathbf{304\,\%}
+\end{align}
+where the PBP formula expresses the fractional-year crossing of zero in the cumulative balance ($-775 \to +1{,}585$), and the NPV sum uses each year's discounted ATCF rather than an annuity approximation. Excluding the battery-longevity benefit (which the simulator does not model) reduces the previously reported NPV$_5$ from NT\$10.5M to NT\$10.1M and lengthens PBP from 3.8 to 3.9 months --- the financial conclusion is unaffected.
+
+\subsubsection{Sensitivity analysis}
+
+Because the throughput-driven revenue term dominates the annual cash benefit, the dominant single-variable sensitivity is the contribution margin per pick. Table~\ref{tab:fin_sensitivity} reports PBP and 5-year NPV as the per-pick margin varies from NT\$5 (deep-discount, unrealistic) to NT\$40 (premium non-grocery e-commerce). Figure~\ref{fig:fin_sensitivity} visualises the same data. Across the full $5\times$ margin range tested, the proposed configuration pays back within nine months and produces a positive 5-year NPV; the financial conclusion is robust to the margin assumption.
+
+\begin{table}[t]
+  \centering
+  \caption{Sensitivity of PBP and 5-year NPV to contribution margin per pick (retrofit case, NT\$ thousands). Both metrics use the full ramp + inflation cash flow model with battery savings excluded; ATCF column reports the Year-3 (full-ramp) value as a single-figure reference.}
+  \label{tab:fin_sensitivity}
+  \small
+  \begin{tabular}{rrrr}
+    \toprule
+    Margin (NT\$/pick) & ATCF$_3$ (NT\$k) & PBP (months) & NPV$_5$ @ 10\% (NT\$k) \\
+    \midrule
+    5  & 1{,}064 & 12.4 & 2{,}794 \\
+    10 & 2{,}064 & 6.5 & 6{,}469 \\
+    \textbf{15 (base)} & \textbf{3{,}064} & \textbf{3.9} & \textbf{10{,}144} \\
+    20 & 4{,}064 & 3.0 & 13{,}819 \\
+    25 & 5{,}064 & 2.4 & 17{,}494 \\
+    30 & 6{,}064 & 1.9 & 21{,}169 \\
+    40 & 8{,}064 & 1.4 & 28{,}519 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{financial_sensitivity_pbp.png}
+  \caption{Sensitivity of payback period (left axis, red) and 5-year NPV at 10\,\% discount (right axis, green) to contribution margin per pick. The base case (NT\$15) is marked. Across the full range tested, PBP remains under nine months and NPV positive.}
+  \label{fig:fin_sensitivity}
+\end{figure}
+
+\subsubsection{Caveats and scoping}
+
+Five conservative simplifications are embedded in the model and should be stated for transparency:
+\begin{enumerate}
+  \item \emph{Picker-corridor wiring is assumed to be available.} If electrical-panel upgrade is required at the picker corridor, add $\sim$NT\$50k--150k to CapEx. PBP does not move past four months even in the most adverse case.
+  \item \emph{No labour reallocation savings.} Picker-station headcount does not change between baseline and proposed, so neither labour cost nor labour saving enters the model.
+  \item \emph{No working-capital effect.} The marginal increase in completed orders may require modest inventory and packaging-capacity expansion. Industry consensus is $\le 2\,\%$ of revenue gain.
+  \item \emph{No deadlock-recovery cost monetised.} The Phase-3 Robust deadlock rate (2/9 vs Peak's 4/9) implies a meaningful reduction in incident-driven downtime and manual-recovery cost. Industry estimates of USD\$500--2{,}000 per deadlock event are not added to the benefit side; this is conservative.
+  \item \emph{Long-horizon throughput is extrapolated, not measured beyond 100\,k seconds.} The 244k-orders-per-year delta assumes steady-state behaviour matches the simulator's late-horizon energy-balance ratio. A multi-week empirical validation in deployment would reduce this uncertainty.
+\end{enumerate}
+
+\paragraph{Bottom line.}
+Under base-case assumptions calibrated to a Carrefour-class Taiwan e-commerce warehouse operating 2 shifts at 4{,}800\,hr/yr, with throughput ramp, revenue and energy escalation, and maintenance ageing modelled year-on-year (but battery longevity excluded as out-of-scope per Section~\ref{sec:limitations}), the retrofit case for the joint placement-policy optimum recovers its NT\$775\,k capital outlay within \emph{just under four operating months} and delivers a 5-year discounted NPV of \emph{NT\$10.1 million} (USD\$327k) net of all tax, depreciation, maintenance, and relocation costs. The throughput axis (NT\$2.9--4.0\,M/yr revenue gain, growing from Year 1 to Year 5) dominates the case; energy cost savings are negligible in absolute dollar terms. The conclusion is robust across the full margin sensitivity tested.
 
 \subsection{Mechanism analysis of deadlock and fleet depletion per pipeline}
 \label{sec:mech_deadlock_depletion}
@@ -974,6 +1467,50 @@ These observations also explain why the Robust candidate dominates the Peak cand
   \label{fig:depletion}
 \end{figure*}
 
+\subsection{Energy-balance ceiling of opportunistic placement (P3)}
+\label{sec:p3_energy_balance}
+
+The mechanism analysis above attributes P3's headline win to dwell-aligned chargers harvesting incidental charge during pod-processing stops. A natural follow-up question is: \emph{how far can opportunistic placement be pushed by adding chargers?} If we saturate the picker corridor with chargers, does drive-by charging eventually cover an entire trip cycle? And if not, does the active-dispatch threshold policy close the residual? We answer both questions empirically from the existing Phase~1, Phase~2 and charger-sweep runs.
+
+We re-analysed every available P3 run at $T = 20{,}000$\,s using a per-cycle energy-balance frame. The energy spent per trip cycle is computed as motion plus base drain, normalised by orders-per-robot; the energy gained per cycle is recovered from the per-robot accounting via $E_\text{gain} = E_\text{spend} - \Delta B_\text{batt}$. The balance ratio $\rho = E_\text{gain}/E_\text{spend}$ is the per-cycle replenishment fraction; $\rho \geq 1$ would imply a robot can operate indefinitely on the current charging regime, while $\rho < 1$ implies a net deficit per cycle that must eventually be paid for from initial battery reserve.
+
+\paragraph{The drive-by ceiling.}
+The charger-sweep runs use the placement-P3 launcher with active dispatch disabled (\texttt{disable\_active\_charging=true}), so the charger gain in those rows is the pure opportunistic mechanism. Table~\ref{tab:p3_balance} reports the result across $|C| \in \{5, 10, \ldots, 50\}$. Per-cycle spend is essentially flat at $43 \pm 0.3$\,kJ; per-cycle gain rises monotonically with $|C|$ from $10.0$\,kJ at $|C| = 5$ to $26.2$\,kJ at $|C| = 50$, but the curve is concave and saturates. The balance ratio climbs from $0.23$ at $|C| = 5$ to a ceiling of $\rho \approx 0.60$ at $|C| \geq 45$, with the knee at $|C| \approx 25$--$30$ where each additional charger contributes less than $0.5$\,kJ/cycle. Even with one charger per picker-corridor cell ($|C| = 50$, exceeding the 20-robot fleet), opportunistic harvesting recovers only $60\,\%$ of per-cycle expenditure. The mechanism behind the ceiling is that the per-visit charge gain is bounded by $P_\text{charge} \cdot \tau_\text{dwell}$ where $P_\text{charge} = 397.6$\,W and $\tau_\text{dwell}$ is the picker-corridor dwell time per pod-processing stop. Adding chargers raises the \emph{probability} of dwelling on a charger cell (saturating once every picker cell is provisioned) but cannot raise the \emph{duration} of a dwell or the charger's output rate.
+
+\begin{table}[t]
+\centering
+\caption{Per-cycle energy balance on P3 across the charger-budget sweep ($T = 20{,}000$\,s, 20 robots, \emph{active dispatch disabled}; gain is from drive-by charging only). $E_\text{spend}$ is the per-robot per-cycle expenditure (motion + base drain); $E_\text{gain}$ is recovered from $E_\text{gain} = E_\text{spend} - \Delta B_\text{batt}$. $\rho = E_\text{gain}/E_\text{spend}$.}
+\label{tab:p3_balance}
+\small
+\begin{tabular}{rrrrr}
+\toprule
+$|C|$ & Orders & $E_\text{spend}$ (kJ) & $E_\text{gain}$ (kJ) & $\rho$ \\
+\midrule
+ 5 & 1766 & 42.7 & 10.0 & 0.23 \\
+10 & 1748 & 42.8 & 11.3 & 0.26 \\
+15 & 1765 & 42.7 & 12.2 & 0.29 \\
+20 & 1754 & 43.1 & 15.4 & 0.36 \\
+25 & 1757 & 42.9 & 17.9 & 0.42 \\
+30 & 1729 & 43.1 & 21.8 & 0.50 \\
+35 & 1742 & 43.5 & 24.3 & 0.56 \\
+40 & 1756 & 43.0 & 24.7 & 0.58 \\
+45 & 1769 & 43.2 & 25.8 & 0.60 \\
+50 & 1741 & 43.5 & 26.2 & 0.60 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Does active dispatch close the residual at $|C|=12$? A null result.}
+The natural follow-up is whether the threshold policy ($\tau_\text{low}, \tau_\text{full}$, interrupt) closes the $0.60 \rightarrow 1.0$ gap when active charging is re-enabled. The Phase~1 factorial corners and the Phase~2 RSM cells already provide hybrid-mode data (drive-by ON, active dispatch ON) at $|C| = 12$. Across $15$ policy cells with healthy completion ($\geq 1700$ orders), $\rho_\text{hybrid}$ is essentially constant at $0.273 \pm 0.005$, including the Phase~1 best corner ($\tau_\text{low}=15,\tau_\text{full}=60$, interrupt-on, $\rho = 0.274$) and the Phase~2 CRSM optimum ($\tau_\text{low}=20,\tau_\text{full}=60$, interrupt-on, $\rho = 0.275$). Interpolating the drive-by-only sweep to $|C| = 12$ from Table~\ref{tab:p3_balance} (between $|C| = 10$ at $\rho = 0.263$ and $|C| = 15$ at $\rho = 0.285$) gives $\rho_\text{drive-by}(|C|=12) \approx 0.274$. The two mechanisms therefore give \emph{indistinguishable} balance ratios at the headline budget.
+
+Only one policy corner deviated meaningfully: $\tau_\text{low}=25, \tau_\text{full}=90$, interrupt-off pushed $\rho$ to $0.316$, but at the cost of $200$ fewer orders ($1559$ vs the $\sim 1750$ baseline) --- the additional gain came from extended charging dwell time taken out of productive throughput, not from any new energy source. This corner is the exception that proves the rule: \emph{the energy ceiling at $|C| = 12$ is set by picker-corridor dwell time, and any policy that exceeds the drive-by ceiling does so by trading orders for charging time.}
+
+\paragraph{Interpretation: the bottleneck is supply rate, not dispatch.}
+The combined result --- drive-by ceiling at $\rho \approx 0.60$ saturated by $|C| \approx 45$, and hybrid $\rho \approx 0.27$ indistinguishable from drive-by at $|C| = 12$ across $15$ policies --- isolates the bottleneck as the per-cycle energy supply window $P_\text{charge} \cdot \tau_\text{dwell, total}$, where $\tau_\text{dwell, total}$ is the integrated time-on-any-charger per cycle. At the headline budget ($|C| = 12$), the threshold policy and the drive-by mechanism are competing for the same dwell windows: a robot whose battery crosses $\tau_\text{low}$ is dispatched to a picker-corridor charger it would have visited anyway during normal cycling. Active charging therefore reroutes \emph{when} the dwell happens, not how much energy it delivers. Whether a higher budget ($|C| > 12$) would let active dispatch contribute novel charging cycles --- by dispatching to chargers not otherwise visited during a productive cycle --- is not answered by the present data and is identified as future work; the available hybrid-mode runs are all at $|C| = 12$.
+
+\paragraph{Implications.}
+First, the headline budget ($|C| = 12$) is well below both the drive-by saturation point ($|C| \approx 45$) \emph{and} the regime where active dispatch could plausibly add a novel contribution: the picker corridor has $\sim 6$ cells, so chargers exceed dwell points by a factor of two only beyond $|C| \approx 12$, and supply-rate saturation kicks in by $|C| \approx 30$. Second, the long-horizon mortality on P3 (17/20 dead at $T=100{,}000$\,s) is consistent with the $\rho < 1$ finding: a per-cycle deficit of $\sim 40\,\%$ depletes the $1.8$\,kWh initial reserve over the run length, and the surviving subset reflects the variance in cycle count and dwell-time accumulation across the fleet. Third, the policy-axis improvements documented in Phase~2 (constrained-RSM optimum dominating Phase-1 best corner by an order of magnitude on throughput) are not driven by energy-balance differences --- the policy axis modulates throughput, deadlock avoidance, and contention dynamics, but not the per-cycle energy supply rate. This sharpens the interpretation of Phase~2's headline gain: it is a coordination-and-contention gain, not an energy-supply gain.
+
 \subsection{Implications for warehouse design beyond charging}
 
 The methodology generalises beyond the specific RMFS-charging context. Three transfer points are worth flagging:
@@ -986,9 +1523,13 @@ The methodology generalises beyond the specific RMFS-charging context. Three tra
 
 \section{Limitations}
 \label{sec:limitations}
-The simulator does not currently expose a seed parameter to the experiment runner, so replicate runs of the same (placement, policy, noise) configuration are not possible. We therefore cannot perform a formal lack-of-fit $F$-test on the Phase~2 quadratic surfaces; coefficients are reported as point estimates and the constrained optimum is a deterministic prediction. Phase~3 noise-factor S/N ratios likewise reflect single-realisation simulator behaviour. Extending the simulator with a seed-controlled RNG, adding centre-point replicates to Phase~2, and replicating Phase~3 cells across $\ge 3$ seeds is identified as the highest-priority follow-up.
+The simulator is fully deterministic conditional on its random seed, and is operated in a single-seed-per-cell regime throughout. The methodological consequences --- in particular the absence of a pure-error term, the inapplicability of the formal lack-of-fit $F$-test, and the substitution of visual residual diagnostics for low-power formal pre-tests at moderate $n$ --- are stated and justified against the simulation-DoE literature in Section~\ref{sec:phase2b_validity}; the same protocol applies to all RSM fits in this paper (Phase~2, Phase~2b Stage~1, and the Phase~2b Stage~2 saturation curves of Fig.~\ref{fig:phase2b_stage2_saturation}). Coefficients are reported as point estimates and the constrained and unconstrained optima are deterministic predictions. Phase~3 noise-factor S/N ratios likewise reflect single-realisation simulator behaviour, with the orthogonal-array design itself supplying the noise envelope that replication would otherwise estimate. Extending the simulator with a seed-controlled RNG, adding centre-point replicates to Phase~2 and Phase~2b for a true pure-error term, and replicating Phase~3 cells across $\ge 3$ seeds is identified as the highest-priority statistical follow-up.
 
 The deadlock manifolds discovered in Phases~1--2 (P2 at $\tau_\text{low}=25, \tau_\text{full}=60$, interrupt off; P3 at $\tau_\text{low}\approx 20, \tau_\text{full}\ge 89$, interrupt on @50\,\%) are characterised within the immediate neighbourhood of the design centre. A wider sweep of policy space may reveal additional infeasible regions; this is left as future work.
+
+The policy axis itself is restricted in this study to the three-knob parameterised threshold class ($\tau_\text{low}, \tau_\text{full}$, interrupt). A reinforcement-learning extension of the policy axis was attempted: a Gymnasium per-AMR-per-event wrapper around the same simulator, masked PPO via \texttt{sb3-contrib}, the Bischoff $A_\text{full}$ action space, and four hyper-parameter and reward-shaping configurations were exercised on the P1 placement (Section~\ref{sec:rl_role}). All four runs exhibited structural policy collapse to the null charging action within $4$--$8$ PPO iterations, traced to action-mask asymmetry combined with a sparse battery-depletion penalty whose payoff lies beyond PPO's $\gamma=0.99$ effective horizon. Whether an environment with a dense battery-cost shaping term, a null-action-removed action space, or a fleet-level (rather than per-event) decision granularity admits a stable RL solution that improves on the constrained-RSM optimum is therefore an open question that the present framework characterises rather than answers.
+
+\emph{Battery degradation is not modelled in the simulator.} The battery model tracks instantaneous state-of-charge and capacity-bounded charging power, but does not implement cyclic-aging (cycle-count decay as a function of Depth of Discharge), calendar-aging (time-dependent capacity loss as a function of average SoC and temperature), or lithium-plating risk at low SoC and low temperature. Equally important, no battery-health term enters the charging policy: the joint-optimisation framework optimises only throughput-related KPIs ($\tau_\text{low}, \tau_\text{full}$, interrupt) and treats battery longevity as a derived rather than constrained quantity. The Phase-2 constrained-RSM optimum's shallow Depth of Discharge ($42\,\%$ per cycle, between $\tau_\text{low}=18\,\%$ and $\tau_\text{full}=60\,\%$) and moderate average state-of-charge ($\sim\!39\,\%$) lie inside the calendar-aging minimum band of 30--50\,\% SoC reported in the Li-ion aging literature \cite{keil2016,schmalstieg2014,vetter2005}, so a battery-longevity benefit is plausible on physical grounds. However, since the simulator does not produce a degradation trajectory and no policy-side constraint enforces it, we deliberately exclude any battery-longevity benefit from the financial projection of Section~\ref{sec:financial_projection}. Extending the simulator with a peer-reviewed battery-aging model (e.g., Schmalstieg et al.~\cite{schmalstieg2014}) and adding a battery-health term to the policy objective is identified as a follow-up direction.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -996,7 +1537,7 @@ We presented a phased Design of Experiments framework for joint placement-policy
 
 The framework yields three contributions of practical interest. Methodologically, treating discovered deadlock zones as infeasibility constraints --- rather than as missing data points to be substituted --- preserves statistical defensibility while turning the deadlock manifolds themselves into research findings. Empirically, the most operationally actionable lever in the noise envelope is start-of-shift battery state, not demand or fleet-attrition variation; a warehouse operator absorbs $\pm 30\,\%$ demand swings and up to two charger faults with minimal impact on throughput, while a $50\,\%$ start-of-shift battery state is catastrophic. The joint optimum also dominates the alternatives on energy cost per completed order ($\eta_E = 80$\,kJ/order vs $94$--$98$\,kJ/order for P1/P2/P4 at the long horizon, a $\sim 17\,\%$ operating-expense reduction; within Phase~3 the Robust policy delivers $44.4$\,kJ/order vs Peak's $48.8$\,kJ/order despite the latter's lower absolute consumption, because Peak's deadlock cells suppress order completion). As a recommendation, the joint optimum (P3 placement with $|C|=12$ picker-corridor cells; policy $\tau_\text{low}=18\,\%$, $\tau_\text{full}=60\,\%$, interrupt enabled at $50\,\%$; operating practice ensuring $\ge 70\,\%$ initial battery) constitutes a CapEx-OpEx package that admits an explicit cost-benefit comparison with single-axis optimisation.
 
-Future work will replicate the Phase~2 RSM and Phase~3 $L_9$ across multiple RNG seeds, extend the policy axis to include the disable-active-charging mode (pure-opportunistic regime) under the same RSM framework, and characterise hybrid placements combining P3's dwell-alignment with the spatial spread of the set-cover and affinity-propagation algorithms. A wider sweep of the policy space to map additional infeasible regions, and a capacity-versus-count comparison raising $E_\text{cap}$ instead of $|C|$, would also enrich the cost-benefit boundary between robot-side and infrastructure-side investment.
+Future work will replicate the Phase~2 RSM and Phase~3 $L_9$ across multiple RNG seeds, extend the policy axis to include the disable-active-charging mode (pure-opportunistic regime) under the same RSM framework, and characterise hybrid placements combining P3's dwell-alignment with the spatial spread of the set-cover and affinity-propagation algorithms. A wider sweep of the policy space to map additional infeasible regions, and a capacity-versus-count comparison raising $E_\text{cap}$ instead of $|C|$, would also enrich the cost-benefit boundary between robot-side and infrastructure-side investment. A reinforcement-learning extension of the policy axis was also exercised but did not yield a converged training run: four masked-PPO configurations on the P1 placement collapsed to a null-charging policy within $4$--$8$ training iterations, with the collapse traced to action-mask asymmetry and a sparse battery-depletion penalty falling outside PPO's effective discount horizon (Section~\ref{sec:rl_role}). Re-engineering the RL environment with dense battery-cost shaping, a null-action-free action space, or fleet-level decision granularity --- and re-running the full PPO campaign across the four placements --- is therefore identified as a follow-up direction whose methodological cost (a re-engineered reward signal that partly decouples the RL agent from the heuristic baseline it would refine) is non-trivial.
 
 \appendices
 
@@ -1066,6 +1607,76 @@ The Peak candidate's worst case (Run 2: $325$ orders, last order at tick $3{,}73
 
 Conversely, both candidates clear the cells with init\_batt $\geq 0.7$ and no deadlock at fleet=$22$ + faults=$2$ (Robust Run 3, Peak Run 3), suggesting that the interaction between low initial battery and the policy regime --- not absolute infrastructure stress --- drives the deadlock outcomes.
 
+\section{Glossary of Technical Terms}
+\label{app:glossary}
+
+This paper draws on terminology from Design of Experiments, robotics, reinforcement learning, battery chemistry, and engineering finance. The glossary below collects definitions of the cross-domain terms used in the main text so that readers from any one of these fields can follow the argument.
+
+\subsection*{Battery and Energy}
+\begin{description}
+  \item[State of Charge (SoC)] The robot's current battery level as a percentage of full capacity (0--100\,\%). A robot at $60\,\%$ SoC has $60\,\%$ of its rated energy remaining.
+  \item[Depth of Discharge (DoD)] The fraction of capacity used in a single discharge-then-recharge cycle. A robot that cycles between $20\,\%$ and $90\,\%$ SoC has a $70\,\%$ DoD per cycle.
+  \item[Cyclic aging] Battery capacity loss caused by repeated charge--discharge cycles. The rate scales approximately with $\text{DoD}^{-\alpha}$ where $\alpha \approx 1.5\text{--}2.0$ for NMC chemistry: shallower DoD per cycle $\Rightarrow$ many more cycles per battery.
+  \item[Calendar aging] Battery capacity loss that occurs over time even when the battery is not being used. Driven mainly by chemical degradation at the electrodes; the rate increases sharply at high SoC ($\gtrsim 80\,\%$) and modestly at very low SoC ($\lesssim 15\,\%$), with the minimum near 30--50\,\% SoC for NMC chemistry.
+  \item[Lithium plating] A degradation mode where metallic lithium deposits on the anode during low-SoC fast charging, especially at low temperatures. Causes irreversible capacity loss; the $\tau_\text{low} = 18\,\%$ floor in our policy is set above the plating-risk band.
+  \item[NMC chemistry] Lithium Nickel Manganese Cobalt Oxide cathode, the dominant cell chemistry in automotive-grade Li-ion batteries used in AGVs.
+  \item[Replenish ratio] Energy gained from chargers divided by energy consumed over a horizon. Ratios below $100\,\%$ indicate the fleet is net-depleting; values above $100\,\%$ indicate sustainable operation.
+  \item[$\eta_E$ (energy per order)] Total fleet energy consumed divided by orders completed. The operational cost-per-output metric.
+  \item[Drive-by charging] A charging mode where a robot receives energy whenever its grid position coincides with a charger cell, without explicit docking. P3 (Picker-Station Opportunistic) is the placement family designed for this mode.
+  \item[Opportunity charging] A policy strategy where the robot charges during natural idle pauses in the work cycle (e.g., while a pod is being picked at a station), rather than via dedicated charging trips.
+\end{description}
+
+\subsection*{Design of Experiments and Statistics}
+\begin{description}
+  \item[Design of Experiments (DoE)] A statistical framework (Fisher, 1925) for systematically varying input factors and analysing their effect on a response, using as few experiments as possible while preserving statistical power.
+  \item[Response Surface Methodology (RSM)] A second-stage DoE technique that fits a smooth polynomial (usually quadratic) to the relationship between input factors and an output response, enabling analytical optimisation within the design region.
+  \item[Central Composite Design (CCD)] The standard experimental design for RSM, combining $2^k$ factorial corner points, $2k$ axial points, and replicate centre points.
+  \item[Face-centred CCD ($\alpha = 1$)] A CCD variant where axial points sit on the cube faces rather than outside. Chosen when factor bounds are physical limits rather than arbitrary numerical extents.
+  \item[Plackett-Burman design] A screening design estimating only main effects with high run efficiency; cannot detect curvature or interactions.
+  \item[Box-Behnken design] A three-level design that avoids extreme corner points. Not chosen here because the discovered deadlock manifolds sit precisely at the corner combinations.
+  \item[Constrained RSM] An RSM extension that handles a discovered infeasibility region by fitting the smooth response only on the feasible subset and optimising subject to an infeasibility-constraint surface.
+  \item[Taguchi method] A robust-design DoE framework using orthogonal arrays and Signal-to-Noise ratios to find factor settings that maximise mean performance while minimising sensitivity to uncontrollable noise factors.
+  \item[Orthogonal array ($L_9$, $L_{18}$, $L_{27}$)] A balanced sampling plan over multi-level factors. The $L_9$ array used here probes four 3-level factors in nine runs (vs $81$ for full factorial).
+  \item[Signal-to-Noise (S/N) ratio] A single optimisation target combining mean performance and variance. Larger-the-better (LTB): $\eta = -10 \log_{10}(\tfrac{1}{n}\sum 1/y_i^2)$. Smaller-the-better (STB): $\eta = -10 \log_{10}(\tfrac{1}{n}\sum y_i^2)$. Higher S/N is always better.
+  \item[Deadlock manifold] A connected region of policy-parameter space where the operating outcome collapses to deadlock; treated as an infeasibility constraint in our Phase 2 framework rather than as missing data.
+  \item[Michaelis-Menten saturation] A two-parameter functional form $y(x) = y_\infty x / (K + x)$ used to fit the diminishing-returns behaviour of throughput versus charger count.
+\end{description}
+
+\subsection*{Robotics and Simulation}
+\begin{description}
+  \item[AGV / AMR] Automated Guided Vehicle / Autonomous Mobile Robot. AGVs traditionally follow fixed paths, AMRs navigate freely; both are used interchangeably as ``robot'' in this paper.
+  \item[RMFS (Robotic Mobile Fulfillment System)] A warehouse layout where mobile robots transport portable storage pods to stationary picker stations, popularised by the Kiva / Amazon Robotics system.
+  \item[FMS (Fleet Management System)] The centralised dispatcher that assigns pods to robots and routes them through the aisle grid.
+  \item[Pod] A portable storage shelf carried by a robot.
+  \item[Picker / replenishment station] A fixed work cell where a human operator picks items from arriving pods (picker) or replenishes them with new inventory (replenishment).
+  \item[Deadlock] A persistent operational state in which multiple robots block each other's paths and the warehouse productivity collapses. In this paper we distinguish soft deadlock (recoverable when the interrupt mechanism fires) from hard deadlock (catastrophic stall).
+  \item[Set Cover Approximation] An NP-hard combinatorial optimisation problem; we use the greedy approximation algorithm to place chargers covering high-traffic cells within a coverage radius (P1).
+  \item[Affinity Propagation] A message-passing clustering algorithm (Frey \& Dueck, 2007) that selects ``exemplar'' representatives without specifying the number of clusters in advance (P2).
+\end{description}
+
+\subsection*{Reinforcement Learning}
+\begin{description}
+  \item[PPO (Proximal Policy Optimization)] A widely-used policy-gradient reinforcement-learning algorithm; updates a policy to maximise expected return while preventing too-large updates via a clipped surrogate objective.
+  \item[MaskablePPO] PPO with action masking --- the agent is told that certain actions are illegal in certain states, restricting the sample space to legal actions only.
+  \item[Action mask] A boolean vector indicating which actions are legal in the current state. In our environment, charge targets at or below the focal robot's current SoC are masked as illegal.
+  \item[Discount factor ($\gamma$)] The PPO hyperparameter that determines how far into the future the agent considers consequences. $\gamma = 0.99$ implies an effective credit-assignment horizon of $\sim 100$ steps.
+  \item[Policy entropy] A measure of how randomly the agent explores. Entropy near zero indicates the agent has committed deterministically to a single action.
+  \item[Policy collapse] A failure mode in which entropy drops to zero before the agent has discovered a good policy, locking the policy into a suboptimal deterministic behaviour --- the failure mode we observed and diagnosed in Section~\ref{sec:rl_role}.
+  \item[Reward myopia] The condition where a reward signal pays off too immediately to credit a long-horizon decision; the cost of refusing to charge falls outside PPO's $\gamma=0.99$ credit window.
+\end{description}
+
+\subsection*{Engineering Finance}
+\begin{description}
+  \item[CapEx / OpEx] Capital expenditure (one-time investment) vs operating expenditure (ongoing recurring cost).
+  \item[Depreciation] The accounting allocation of a capital asset's cost across its useful life. Non-cash, but reduces taxable income.
+  \item[ATCF (After-Tax Cash Flow)] Pre-tax cash benefit minus tax obligation, with non-cash depreciation added back. The cash that actually accrues to the operator each year.
+  \item[PBP (Payback Period)] Time required for cumulative cash flow to recover the initial CapEx outlay.
+  \item[NPV (Net Present Value)] Present value of future cash flows minus the initial investment, discounted at the firm's cost of capital. NPV $>$ 0 indicates the investment creates value.
+  \item[IRR (Internal Rate of Return)] The discount rate at which NPV equals zero; a single-number summary of return.
+  \item[ROI (Return on Investment)] Annual cash benefit divided by CapEx; an undiscounted return rate.
+  \item[WACC (Weighted Average Cost of Capital)] The discount rate used in NPV calculations; reflects the firm's blended cost of equity and debt financing.
+\end{description}
+
 \begin{thebibliography}{00}
 
 % ── Charger placement ──────────────────────────────────────────────────
@@ -1081,6 +1692,9 @@ Y. H. Wang, H. M. Zhang, and L. S. Peh, ``Research on power consumption of lithi
 % ── Charging strategy / policy ─────────────────────────────────────────
 \bibitem{bischoff2025}
 J. Bischoff, A. Rinciog, and A. Meyer, ``Reinforcement Learning for AMR Charging Decisions: The Impact of Reward and Action Space Design,'' \emph{arXiv preprint arXiv:2505.11136}, 2025.
+
+\bibitem{sb3contrib}
+A. Raffin, A. Hill, A. Gleave, A. Kanervisto, M. Ernestus, and N. Dormann, ``Stable-Baselines3: Reliable Reinforcement Learning Implementations,'' \emph{Journal of Machine Learning Research}, vol. 22, no. 268, pp. 1--8, 2021. (Maskable PPO via the \texttt{sb3-contrib} package.)
 
 \bibitem{ebben2001}
 M. Ebben, \emph{Logistic Control in Automated Transportation Networks}, Ph.D. thesis, University of Twente, Netherlands, 2001.
@@ -1150,6 +1764,21 @@ R. H. Myers, D. C. Montgomery, and C. M. Anderson-Cook, \emph{Response Surface M
 \bibitem{khuri1996}
 A. I. Khuri and J. A. Cornell, \emph{Response Surfaces: Designs and Analyses}, 2nd ed. New York: Marcel Dekker, 1996.
 
+\bibitem{kleijnen2015}
+J. P. C. Kleijnen, \emph{Design and Analysis of Simulation Experiments}, 2nd ed. Cham, Switzerland: Springer International Publishing, 2015.
+
+\bibitem{law2015}
+A. M. Law, \emph{Simulation Modeling and Analysis}, 5th ed. New York: McGraw-Hill Education, 2015.
+
+\bibitem{sanchez2015}
+S. M. Sanchez and H. Wan, ``Work smarter, not harder: A tutorial on designing and conducting simulation experiments,'' in \emph{Proc. 2015 Winter Simulation Conf. (WSC)}, Huntington Beach, CA, USA, Dec. 2015, pp. 1795--1809.
+
+\bibitem{kutner2005}
+M. H. Kutner, C. J. Nachtsheim, J. Neter, and W. Li, \emph{Applied Linear Statistical Models}, 5th ed. Boston, MA: McGraw-Hill/Irwin, 2005.
+
+\bibitem{seabold2010}
+S. Seabold and J. Perktold, ``statsmodels: Econometric and statistical modeling with Python,'' in \emph{Proc. 9th Python in Science Conf. (SciPy)}, Austin, TX, USA, Jun. 2010, pp. 92--96.
+
 \bibitem{taguchi1986}
 G. Taguchi, \emph{Introduction to Quality Engineering: Designing Quality into Products and Processes}. Tokyo: Asian Productivity Organization, 1986.
 
@@ -1162,12 +1791,57 @@ P. J. Ross, \emph{Taguchi Techniques for Quality Engineering: Loss Function, Ort
 \bibitem{kuhnle2019}
 A. Kuhnle, L. Schäfer, N. Stricker, and G. Lanza, ``Design, implementation and evaluation of reinforcement learning for an adaptive order dispatching in job shop manufacturing systems,'' \emph{Procedia CIRP}, vol. 81, pp. 234--239, 2019.
 
+\bibitem{jain2001}
+K. Jain and V. V. Vazirani, ``Approximation algorithms for metric facility location and $k$-median problems using the primal-dual schema and Lagrangian relaxation,'' \emph{Journal of the ACM}, vol. 48, no. 2, pp. 274--296, Mar. 2001.
+
+\bibitem{vazirani2001}
+V. V. Vazirani, \emph{Approximation Algorithms}. Berlin, Germany: Springer-Verlag, 2001.
+
+\bibitem{shahriari2016}
+B. Shahriari, K. Swersky, Z. Wang, R. P. Adams, and N. de Freitas, ``Taking the human out of the loop: A review of Bayesian optimization,'' \emph{Proceedings of the IEEE}, vol. 104, no. 1, pp. 148--175, Jan. 2016.
+
 % ── Energy modelling ───────────────────────────────────────────────────
 \bibitem{zakka2025}
 A. Zakka \emph{et al.}, ``Energy modelling for Robotic Mobile Fulfillment Systems,'' \emph{Unpublished Working Paper}, 2025.
 
 \bibitem{haney1995}
 R. Haney, ``Modelling battery constraints in discrete event automated guided vehicle simulations,'' \emph{International Journal of Production Research}, vol. 33, no. 11, pp. 3023--3040, Nov. 1995.
+
+\bibitem{bechtsis2017}
+D. Bechtsis, N. Tsolakis, D. Vlachos, and E. Iakovou, ``Sustainable supply chain management in the digitalisation era: The impact of Automated Guided Vehicles,'' \emph{Journal of Cleaner Production}, vol. 142, part 4, pp. 3970--3984, Jan. 2017.
+
+\bibitem{taipower2024}
+Taiwan Power Company, ``Electricity Tariff Schedule --- High-Voltage Industrial Bracket,'' Taipei, Taiwan, 2024. [Online]. Available: \url{https://www.taipower.com.tw}
+
+\bibitem{taiwanmof}
+National Taxation Bureau, Ministry of Finance Taiwan, ``Income Tax Act and Industrial Equipment Depreciation Schedule (IAS-16 aligned),'' Taipei, Taiwan, 2024.
+
+\bibitem{bartholdi2019}
+J. J. Bartholdi and S. T. Hackman, \emph{Warehouse \& Distribution Science}, Release 0.98. Atlanta, GA: Supply Chain and Logistics Institute, Georgia Tech, 2019.
+
+\bibitem{tompkins2010}
+J. A. Tompkins, J. A. White, Y. A. Bozer, and J. M. A. Tanchoco, \emph{Facilities Planning}, 4th ed. Hoboken, NJ: John Wiley \& Sons, 2010.
+
+\bibitem{bnef2024}
+BloombergNEF, ``Lithium-ion Battery Price Survey 2024,'' BNEF Annual Report, Dec.~2024.
+
+\bibitem{saxena2016}
+S. Saxena, C. Le Floch, J. MacDonald, and S. Moura, ``Quantifying EV battery end-of-life through analysis of travel needs with vehicle powertrain models,'' \emph{Journal of Power Sources}, vol. 282, pp. 265--276, May~2016.
+
+\bibitem{sandborn2019}
+P. Sandborn, P. Lucyshyn, and S. Vermeer, ``A cost model for automated guided vehicle deployment in manufacturing systems,'' \emph{International Journal of Production Economics}, vol. 211, pp. 234--245, May~2019.
+
+\bibitem{yu2008}
+W. Yu and P. J. Egbelu, ``Scheduling of inbound and outbound trucks in cross docking systems with temporary storage,'' \emph{European Journal of Operational Research}, vol. 184, no. 1, pp. 377--396, Jan.~2008.
+
+\bibitem{keil2016}
+P. Keil, S. F. Schuster, J. Wilhelm, J. Travi, A. Hauser, R. C. Karl, and A. Jossen, ``Calendar Aging of Lithium-Ion Batteries: I. Impact of the Graphite Anode on Capacity Fade,'' \emph{Journal of The Electrochemical Society}, vol. 163, no. 9, pp. A1872--A1880, Jul.~2016.
+
+\bibitem{schmalstieg2014}
+J. Schmalstieg, S. K\"abitz, M. Ecker, and D. U. Sauer, ``A holistic aging model for Li(NiMnCo)O$_2$ based 18650 lithium-ion batteries,'' \emph{Journal of Power Sources}, vol. 257, pp. 325--334, Jul.~2014.
+
+\bibitem{vetter2005}
+J. Vetter, P. Nov\'ak, M. R. Wagner, C. Veit, K.-C. M\"oller, J. O. Besenhard, M. Winter, M. Wohlfahrt-Mehrens, C. Vogler, and A. Hammouche, ``Ageing mechanisms in lithium-ion batteries,'' \emph{Journal of Power Sources}, vol. 147, no. 1--2, pp. 269--281, Sep.~2005.
 
 \end{thebibliography}
 

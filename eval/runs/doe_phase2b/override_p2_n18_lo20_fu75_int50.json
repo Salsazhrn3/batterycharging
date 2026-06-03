@@ -1,0 +1,1 @@
+{"pipeline": 2, "num_chargers": 18, "disable_active_charging": false, "battery_low_pct": 20, "battery_charged_pct": 75, "battery_interrupt_pct": 50, "initial_battery_frac": 1.0}

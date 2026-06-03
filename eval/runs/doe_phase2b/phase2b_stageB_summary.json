@@ -1,0 +1,135 @@
+{
+  "stage": "B",
+  "horizon": 100000,
+  "factor_levels": {
+    "num_chargers": [
+      6,
+      18,
+      30
+    ],
+    "tau_low": [
+      15,
+      20,
+      25
+    ],
+    "tau_full": [
+      60,
+      75,
+      90
+    ],
+    "placements": [
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "fixed": {
+    "interrupt": 50,
+    "initial_battery_frac": 1.0,
+    "disable_active_charging": false
+  },
+  "runs": [
+    {
+      "id": "p1_n3_lo21_fu82_int50",
+      "rc": 0,
+      "elapsed_min": 160.3
+    },
+    {
+      "id": "p1_n8_lo21_fu82_int50",
+      "rc": 0,
+      "elapsed_min": 176.5
+    },
+    {
+      "id": "p1_n13_lo21_fu82_int50",
+      "rc": 0,
+      "elapsed_min": 233.1
+    },
+    {
+      "id": "p1_n17_lo21_fu82_int50",
+      "rc": 0,
+      "elapsed_min": 183.6
+    },
+    {
+      "id": "p1_n20_lo21_fu82_int50",
+      "rc": 0,
+      "elapsed_min": 192.0
+    },
+    {
+      "id": "p2_n3_lo15_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 168.5
+    },
+    {
+      "id": "p2_n8_lo15_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 174.4
+    },
+    {
+      "id": "p2_n13_lo15_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 198.7
+    },
+    {
+      "id": "p2_n17_lo15_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 199.3
+    },
+    {
+      "id": "p2_n20_lo15_fu90_int50",
+      "rc": 0,
+      "elapsed_min": 232.6
+    },
+    {
+      "id": "p3_n3_lo17_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 165.6
+    },
+    {
+      "id": "p3_n8_lo17_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 270.9
+    },
+    {
+      "id": "p3_n13_lo17_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 229.8
+    },
+    {
+      "id": "p3_n17_lo17_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 228.5
+    },
+    {
+      "id": "p3_n20_lo17_fu60_int50",
+      "rc": 0,
+      "elapsed_min": 241.0
+    },
+    {
+      "id": "p4_n3_lo15_fu76_int50",
+      "rc": 0,
+      "elapsed_min": 211.3
+    },
+    {
+      "id": "p4_n8_lo15_fu76_int50",
+      "rc": 0,
+      "elapsed_min": 202.1
+    },
+    {
+      "id": "p4_n13_lo15_fu76_int50",
+      "rc": 0,
+      "elapsed_min": 196.7
+    },
+    {
+      "id": "p4_n17_lo15_fu76_int50",
+      "rc": 0,
+      "elapsed_min": 189.6
+    },
+    {
+      "id": "p4_n20_lo15_fu76_int50",
+      "rc": 0,
+      "elapsed_min": 175.4
+    }
+  ],
+  "total_elapsed_h": 67.17
+}

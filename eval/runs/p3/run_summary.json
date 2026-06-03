@@ -1,16 +1,16 @@
 {
   "pipeline": 3,
-  "horizon": 10000,
-  "setup_seconds": 6.66,
-  "tick_seconds": 1440.56,
-  "ticks_per_second": 6.9,
+  "horizon": 5000,
+  "setup_seconds": 4.23,
+  "tick_seconds": 644.45,
+  "ticks_per_second": 7.8,
   "tick_result": {
     "status": "done",
-    "final_tick": 10000.049999987434,
-    "total_energy": 20447977.9050095,
-    "pending_jobs": 16,
-    "stop_and_go": 29173,
-    "total_turning": 22265
+    "final_tick": 5000.09999999956,
+    "total_energy": 10552810.312886776,
+    "pending_jobs": 6,
+    "stop_and_go": 14707,
+    "total_turning": 10844
   },
   "num_robots": 20,
   "num_chargers": 12,

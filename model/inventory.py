@@ -261,6 +261,11 @@ class Inventory(Universe):
         sku_need_replenished = []
         for order_id, sku, quantity in job.orders:
             order: Order = self.order_manager.get_order_by_id(order_id)
+            if order is None:
+                # Skip orders missing from OrderManager (preassigned/DB rows that never
+                # passed through add_order) so RL episodes don't crash on stray ids.
+                print(f"[WARN] finish_picking_task: order_id={order_id!r} not in OrderManager; skipping (sku={sku}, qty={quantity})")
+                continue
             order.deliver_quantity(sku, quantity)
             print("order, sku, quantity :" ,order_id, sku, quantity)
 

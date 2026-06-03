@@ -1,0 +1,550 @@
+{
+  "stage": "phase2b_stage2",
+  "design": {
+    "fleet_N": 20,
+    "C_levels": [
+      3,
+      8,
+      13,
+      17,
+      20
+    ],
+    "ratios": [
+      0.15,
+      0.4,
+      0.65,
+      0.85,
+      1.0
+    ],
+    "placement_tau": {
+      "p1": {
+        "tau_low": 21,
+        "tau_full": 82
+      },
+      "p2": {
+        "tau_low": 15,
+        "tau_full": 90
+      },
+      "p3": {
+        "tau_low": 17,
+        "tau_full": 60
+      },
+      "p4": {
+        "tau_low": 15,
+        "tau_full": 76
+      }
+    },
+    "interrupt_pct": 50,
+    "horizon": 100000
+  },
+  "by_response": {
+    "replenish_pct": {
+      "p1": {
+        "placement": 1,
+        "label": "P1 Set Cover",
+        "response": "replenish_pct",
+        "tau_low": 21,
+        "tau_full": 82,
+        "fleet_N": 20,
+        "design_points": [
+          {
+            "id": "p1_n3_lo21_fu82_int50",
+            "num_chargers": 3,
+            "ratio": 0.15,
+            "y": 44.21583510708446,
+            "deadlock": false
+          },
+          {
+            "id": "p1_n8_lo21_fu82_int50",
+            "num_chargers": 8,
+            "ratio": 0.4,
+            "y": 34.78656576353597,
+            "deadlock": false
+          },
+          {
+            "id": "p1_n13_lo21_fu82_int50",
+            "num_chargers": 13,
+            "ratio": 0.65,
+            "y": 47.7030420441954,
+            "deadlock": false
+          },
+          {
+            "id": "p1_n17_lo21_fu82_int50",
+            "num_chargers": 17,
+            "ratio": 0.85,
+            "y": 47.28596172094251,
+            "deadlock": false
+          },
+          {
+            "id": "p1_n20_lo21_fu82_int50",
+            "num_chargers": 20,
+            "ratio": 1.0,
+            "y": 47.1335874186269,
+            "deadlock": false
+          }
+        ],
+        "mm_fit": {
+          "model": "y = y_inf * (|C|/N) / (K + |C|/N)",
+          "y_inf": 45.825518599363235,
+          "K": 0.014397101176249066,
+          "r_squared": 0.05856444982957576,
+          "ratio_at_half_max": 0.014397101176249066,
+          "y_at_max_ratio": 45.1751277150004
+        },
+        "knee": {
+          "ratio": 0.15,
+          "num_chargers": 3,
+          "criterion_met": true,
+          "gain_floor_pct": 5.0,
+          "y_at_knee": 44.21583510708446,
+          "y_max_observed": 47.7030420441954,
+          "pct_of_max": 92.6897598398858
+        },
+        "deadlocked": []
+      },
+      "p2": {
+        "placement": 2,
+        "label": "P2 Affinity Prop.",
+        "response": "replenish_pct",
+        "tau_low": 15,
+        "tau_full": 90,
+        "fleet_N": 20,
+        "design_points": [
+          {
+            "id": "p2_n3_lo15_fu90_int50",
+            "num_chargers": 3,
+            "ratio": 0.15,
+            "y": 45.565119635066964,
+            "deadlock": false
+          },
+          {
+            "id": "p2_n8_lo15_fu90_int50",
+            "num_chargers": 8,
+            "ratio": 0.4,
+            "y": 54.656564660276615,
+            "deadlock": false
+          },
+          {
+            "id": "p2_n13_lo15_fu90_int50",
+            "num_chargers": 13,
+            "ratio": 0.65,
+            "y": 45.77439936339237,
+            "deadlock": false
+          },
+          {
+            "id": "p2_n17_lo15_fu90_int50",
+            "num_chargers": 17,
+            "ratio": 0.85,
+            "y": 46.40460849749626,
+            "deadlock": false
+          },
+          {
+            "id": "p2_n20_lo15_fu90_int50",
+            "num_chargers": 20,
+            "ratio": 1.0,
+            "y": 52.97445974360397,
+            "deadlock": false
+          }
+        ],
+        "mm_fit": {
+          "model": "y = y_inf * (|C|/N) / (K + |C|/N)",
+          "y_inf": 50.694885795663104,
+          "K": 0.013085946105644985,
+          "r_squared": 0.10688224321444506,
+          "ratio_at_half_max": 0.013085946105644985,
+          "y_at_max_ratio": 50.04006421225848
+        },
+        "knee": {
+          "ratio": 0.4,
+          "num_chargers": 8,
+          "criterion_met": true,
+          "gain_floor_pct": 5.0,
+          "y_at_knee": 54.656564660276615,
+          "y_max_observed": 54.656564660276615,
+          "pct_of_max": 100.0
+        },
+        "deadlocked": []
+      },
+      "p3": {
+        "placement": 3,
+        "label": "P3 Picker Heuristic",
+        "response": "replenish_pct",
+        "tau_low": 17,
+        "tau_full": 60,
+        "fleet_N": 20,
+        "design_points": [
+          {
+            "id": "p3_n3_lo17_fu60_int50",
+            "num_chargers": 3,
+            "ratio": 0.15,
+            "y": 49.45466945571643,
+            "deadlock": false
+          },
+          {
+            "id": "p3_n8_lo17_fu60_int50",
+            "num_chargers": 8,
+            "ratio": 0.4,
+            "y": 53.579712201358944,
+            "deadlock": false
+          },
+          {
+            "id": "p3_n13_lo17_fu60_int50",
+            "num_chargers": 13,
+            "ratio": 0.65,
+            "y": 48.19894377483788,
+            "deadlock": false
+          },
+          {
+            "id": "p3_n17_lo17_fu60_int50",
+            "num_chargers": 17,
+            "ratio": 0.85,
+            "y": 49.00360908067445,
+            "deadlock": false
+          },
+          {
+            "id": "p3_n20_lo17_fu60_int50",
+            "num_chargers": 20,
+            "ratio": 1.0,
+            "y": 49.57925090009286,
+            "deadlock": false
+          }
+        ],
+        "mm_fit": {
+          "model": "y = y_inf * (|C|/N) / (K + |C|/N)",
+          "y_inf": 50.0912291416527,
+          "K": 0.001,
+          "r_squared": -0.011311814907317919,
+          "ratio_at_half_max": 0.001,
+          "y_at_max_ratio": 50.041187953699
+        },
+        "knee": {
+          "ratio": 0.4,
+          "num_chargers": 8,
+          "criterion_met": true,
+          "gain_floor_pct": 5.0,
+          "y_at_knee": 53.579712201358944,
+          "y_max_observed": 53.579712201358944,
+          "pct_of_max": 100.0
+        },
+        "deadlocked": []
+      },
+      "p4": {
+        "placement": 4,
+        "label": "P4 Perimeter",
+        "response": "replenish_pct",
+        "tau_low": 15,
+        "tau_full": 76,
+        "fleet_N": 20,
+        "design_points": [
+          {
+            "id": "p4_n3_lo15_fu76_int50",
+            "num_chargers": 3,
+            "ratio": 0.15,
+            "y": 45.305210011530214,
+            "deadlock": false
+          },
+          {
+            "id": "p4_n8_lo15_fu76_int50",
+            "num_chargers": 8,
+            "ratio": 0.4,
+            "y": 46.809031881744026,
+            "deadlock": false
+          },
+          {
+            "id": "p4_n13_lo15_fu76_int50",
+            "num_chargers": 13,
+            "ratio": 0.65,
+            "y": 47.822559302478204,
+            "deadlock": false
+          },
+          {
+            "id": "p4_n17_lo15_fu76_int50",
+            "num_chargers": 17,
+            "ratio": 0.85,
+            "y": 45.23868439427831,
+            "deadlock": false
+          },
+          {
+            "id": "p4_n20_lo15_fu76_int50",
+            "num_chargers": 20,
+            "ratio": 1.0,
+            "y": 45.08268082979453,
+            "deadlock": false
+          }
+        ],
+        "mm_fit": {
+          "model": "y = y_inf * (|C|/N) / (K + |C|/N)",
+          "y_inf": 46.31071527926994,
+          "K": 0.0021917390708949516,
+          "r_squared": 0.03928152763368076,
+          "ratio_at_half_max": 0.0021917390708949516,
+          "y_at_max_ratio": 46.20943625239155
+        },
+        "knee": {
+          "ratio": 0.65,
+          "num_chargers": 13,
+          "criterion_met": true,
+          "gain_floor_pct": 5.0,
+          "y_at_knee": 47.822559302478204,
+          "y_max_observed": 47.822559302478204,
+          "pct_of_max": 100.0
+        },
+        "deadlocked": []
+      }
+    },
+    "orders": {
+      "p1": {
+        "placement": 1,
+        "label": "P1 Set Cover",
+        "response": "orders",
+        "tau_low": 21,
+        "tau_full": 82,
+        "fleet_N": 20,
+        "design_points": [
+          {
+            "id": "p1_n3_lo21_fu82_int50",
+            "num_chargers": 3,
+            "ratio": 0.15,
+            "y": 2306.0,
+            "deadlock": false
+          },
+          {
+            "id": "p1_n8_lo21_fu82_int50",
+            "num_chargers": 8,
+            "ratio": 0.4,
+            "y": 870.0,
+            "deadlock": false
+          },
+          {
+            "id": "p1_n13_lo21_fu82_int50",
+            "num_chargers": 13,
+            "ratio": 0.65,
+            "y": 2463.0,
+            "deadlock": false
+          },
+          {
+            "id": "p1_n17_lo21_fu82_int50",
+            "num_chargers": 17,
+            "ratio": 0.85,
+            "y": 2382.0,
+            "deadlock": false
+          },
+          {
+            "id": "p1_n20_lo21_fu82_int50",
+            "num_chargers": 20,
+            "ratio": 1.0,
+            "y": 2309.0,
+            "deadlock": false
+          }
+        ],
+        "mm_fit": {
+          "model": "y = y_inf * (|C|/N) / (K + |C|/N)",
+          "y_inf": 2092.42203101014,
+          "K": 0.005011872336272725,
+          "r_squared": 0.0009215469018162281,
+          "ratio_at_half_max": 0.005011872336272725,
+          "y_at_max_ratio": 2081.987376075518
+        },
+        "knee": {
+          "ratio": 0.15,
+          "num_chargers": 3,
+          "criterion_met": true,
+          "gain_floor_pct": 5.0,
+          "y_at_knee": 2306.0,
+          "y_max_observed": 2463.0,
+          "pct_of_max": 93.62565976451482
+        },
+        "deadlocked": []
+      },
+      "p2": {
+        "placement": 2,
+        "label": "P2 Affinity Prop.",
+        "response": "orders",
+        "tau_low": 15,
+        "tau_full": 90,
+        "fleet_N": 20,
+        "design_points": [
+          {
+            "id": "p2_n3_lo15_fu90_int50",
+            "num_chargers": 3,
+            "ratio": 0.15,
+            "y": 2485.0,
+            "deadlock": false
+          },
+          {
+            "id": "p2_n8_lo15_fu90_int50",
+            "num_chargers": 8,
+            "ratio": 0.4,
+            "y": 2495.0,
+            "deadlock": false
+          },
+          {
+            "id": "p2_n13_lo15_fu90_int50",
+            "num_chargers": 13,
+            "ratio": 0.65,
+            "y": 2455.0,
+            "deadlock": false
+          },
+          {
+            "id": "p2_n17_lo15_fu90_int50",
+            "num_chargers": 17,
+            "ratio": 0.85,
+            "y": 2534.0,
+            "deadlock": false
+          },
+          {
+            "id": "p2_n20_lo15_fu90_int50",
+            "num_chargers": 20,
+            "ratio": 1.0,
+            "y": 2577.0,
+            "deadlock": false
+          }
+        ],
+        "mm_fit": {
+          "model": "y = y_inf * (|C|/N) / (K + |C|/N)",
+          "y_inf": 2530.99648278757,
+          "K": 0.003391448284213143,
+          "r_squared": 0.17035452840933984,
+          "ratio_at_half_max": 0.003391448284213143,
+          "y_at_max_ratio": 2522.441752035601
+        },
+        "knee": {
+          "ratio": 0.4,
+          "num_chargers": 8,
+          "criterion_met": true,
+          "gain_floor_pct": 5.0,
+          "y_at_knee": 2495.0,
+          "y_max_observed": 2577.0,
+          "pct_of_max": 96.81800543267364
+        },
+        "deadlocked": []
+      },
+      "p3": {
+        "placement": 3,
+        "label": "P3 Picker Heuristic",
+        "response": "orders",
+        "tau_low": 17,
+        "tau_full": 60,
+        "fleet_N": 20,
+        "design_points": [
+          {
+            "id": "p3_n3_lo17_fu60_int50",
+            "num_chargers": 3,
+            "ratio": 0.15,
+            "y": 2770.0,
+            "deadlock": false
+          },
+          {
+            "id": "p3_n8_lo17_fu60_int50",
+            "num_chargers": 8,
+            "ratio": 0.4,
+            "y": 3243.0,
+            "deadlock": false
+          },
+          {
+            "id": "p3_n13_lo17_fu60_int50",
+            "num_chargers": 13,
+            "ratio": 0.65,
+            "y": 3172.0,
+            "deadlock": false
+          },
+          {
+            "id": "p3_n17_lo17_fu60_int50",
+            "num_chargers": 17,
+            "ratio": 0.85,
+            "y": 3319.0,
+            "deadlock": false
+          },
+          {
+            "id": "p3_n20_lo17_fu60_int50",
+            "num_chargers": 20,
+            "ratio": 1.0,
+            "y": 3573.0,
+            "deadlock": false
+          }
+        ],
+        "mm_fit": {
+          "model": "y = y_inf * (|C|/N) / (K + |C|/N)",
+          "y_inf": 3557.066947532129,
+          "K": 0.04402166455223776,
+          "r_squared": 0.8268779311617458,
+          "ratio_at_half_max": 0.04402166455223776,
+          "y_at_max_ratio": 3407.081546586192
+        },
+        "knee": {
+          "ratio": 0.4,
+          "num_chargers": 8,
+          "criterion_met": true,
+          "gain_floor_pct": 5.0,
+          "y_at_knee": 3243.0,
+          "y_max_observed": 3573.0,
+          "pct_of_max": 90.76406381192275
+        },
+        "deadlocked": []
+      },
+      "p4": {
+        "placement": 4,
+        "label": "P4 Perimeter",
+        "response": "orders",
+        "tau_low": 15,
+        "tau_full": 76,
+        "fleet_N": 20,
+        "design_points": [
+          {
+            "id": "p4_n3_lo15_fu76_int50",
+            "num_chargers": 3,
+            "ratio": 0.15,
+            "y": 2461.0,
+            "deadlock": false
+          },
+          {
+            "id": "p4_n8_lo15_fu76_int50",
+            "num_chargers": 8,
+            "ratio": 0.4,
+            "y": 2459.0,
+            "deadlock": false
+          },
+          {
+            "id": "p4_n13_lo15_fu76_int50",
+            "num_chargers": 13,
+            "ratio": 0.65,
+            "y": 2500.0,
+            "deadlock": false
+          },
+          {
+            "id": "p4_n17_lo15_fu76_int50",
+            "num_chargers": 17,
+            "ratio": 0.85,
+            "y": 2518.0,
+            "deadlock": false
+          },
+          {
+            "id": "p4_n20_lo15_fu76_int50",
+            "num_chargers": 20,
+            "ratio": 1.0,
+            "y": 2477.0,
+            "deadlock": false
+          }
+        ],
+        "mm_fit": {
+          "model": "y = y_inf * (|C|/N) / (K + |C|/N)",
+          "y_inf": 2500.1728687581904,
+          "K": 0.002697023361903835,
+          "r_squared": 0.3648970363167371,
+          "ratio_at_half_max": 0.002697023361903835,
+          "y_at_max_ratio": 2493.4479813009298
+        },
+        "knee": {
+          "ratio": 0.15,
+          "num_chargers": 3,
+          "criterion_met": true,
+          "gain_floor_pct": 5.0,
+          "y_at_knee": 2461.0,
+          "y_max_observed": 2518.0,
+          "pct_of_max": 97.736298649722
+        },
+        "deadlocked": []
+      }
+    }
+  }
+}
